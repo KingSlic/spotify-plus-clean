@@ -1,0 +1,2 @@
+SQLALCHEMY_DATABASE_URI = "mysql+pymysql://<USER>:<PASSWORD>@localhost/spotifyplus"
+SQLALCHEMY_TRACK_MODIFICATIONS = False
