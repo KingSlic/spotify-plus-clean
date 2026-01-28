@@ -2,6 +2,7 @@ from flask import Blueprint, jsonify, request
 from app.extensions import db
 from app.models import Playlist, Track, PlaylistTrack
 
+
 playlists_bp = Blueprint("playlists", __name__, url_prefix="/api/playlists")
 
 
@@ -14,11 +15,35 @@ def get_playlists():
                 "id": p.id,
                 "name": p.name,
                 "description": p.description,
-                "type": p.type,
+                "section_id": p.section_id,
                 "image_url": p.image_url,
             }
             for p in playlists
         ]
+    )
+
+
+@playlists_bp.route("/<playlist_id>", methods=["GET"])
+def get_playlist(playlist_id):
+    playlist = Playlist.query.get(playlist_id)
+
+    if not playlist:
+        return jsonify({"error": "Playlist not found"}), 404
+
+    return (
+        jsonify(
+            {
+                "id": playlist.id,
+                "name": playlist.name,
+                "description": playlist.description,
+                "image_url": playlist.image_url,
+                "section_id": playlist.section_id,
+                "created_at": (
+                    playlist.created_at.isoformat() if playlist.created_at else None
+                ),
+            }
+        ),
+        200,
     )
 
 

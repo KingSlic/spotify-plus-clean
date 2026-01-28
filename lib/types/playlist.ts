@@ -1,6 +1,7 @@
-export interface Playlist {
+export type Playlist = {
   id: string;
   name: string;
-  description: string;
-  coverImage: string;
-}
+  description: string | null;
+  image_url: string | null;
+  section_id: string;
+};
