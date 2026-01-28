@@ -1,27 +1,17 @@
 from flask import Blueprint, jsonify
-from app.models import Section, Playlist
+from app.models import Section
 
 sections_bp = Blueprint("sections", __name__)
 
-@sections_bp.route("/", methods=["GET"])
-def get_sections():
+@sections_bp.route("", methods=["GET"])
+def list_sections():
     sections = Section.query.order_by(Section.order).all()
-
-    data = []
-    for section in sections:
-        playlists = Playlist.query.limit(6).all()  # demo-safe
-        data.append({
-            "id": section.id,
-            "title": section.title,
-            "playlists": [
-                {
-                    "id": p.id,
-                    "name": p.name,
-                    "description": p.description,
-                    "imageUrl": p.image_url,
-                }
-                for p in playlists
-            ],
-        })
-
-    return jsonify(data)
+    return jsonify([
+        {
+            "id": s.id,
+            "title": s.title,
+            "order": s.order,
+            "show_all_href": s.show_all_href,
+        }
+        for s in sections
+    ])

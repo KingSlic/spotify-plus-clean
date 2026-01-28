@@ -1,10 +1,9 @@
-from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
-
-db = SQLAlchemy()
+from app.extensions import db
+import uuid
 
 # ======================
-# Association Table
+# Association Tables
 # ======================
 
 
@@ -28,15 +27,20 @@ class Section(db.Model):
     order = db.Column(db.Integer, nullable=False)
     show_all_href = db.Column(db.String(255))
 
-    # Optional: future-proofing
-    created_at = db.Column(db.DateTime)
-    updated_at = db.Column(db.DateTime)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(
+        db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
 
 
 class Artist(db.Model):
     __tablename__ = "artists"
 
-    id = db.Column(db.String(50), primary_key=True)
+    id = db.Column(
+        db.String(50),
+        primary_key=True,
+        default=lambda: f"artist_{uuid.uuid4().hex[:12]}",
+    )
     name = db.Column(db.String(255), nullable=False)
     image_url = db.Column(db.String(500))
 
@@ -50,7 +54,11 @@ class Artist(db.Model):
 class Album(db.Model):
     __tablename__ = "albums"
 
-    id = db.Column(db.String(50), primary_key=True)
+    id = db.Column(
+        db.String(50),
+        primary_key=True,
+        default=lambda: f"album_{uuid.uuid4().hex[:12]}",
+    )
     title = db.Column(db.String(255), nullable=False)
     image_url = db.Column(db.String(500))
 
@@ -60,35 +68,65 @@ class Album(db.Model):
 class Track(db.Model):
     __tablename__ = "tracks"
 
-    id = db.Column(db.String(50), primary_key=True)
-    name = db.Column(db.String(255), nullable=False)
+    id = db.Column(db.String(64), primary_key=True)
+    title = db.Column(db.String(255), nullable=False)
+    duration_ms = db.Column(db.Integer)
+    preview_url = db.Column(db.String(512))
 
-    album_id = db.Column(db.String(50), db.ForeignKey("albums.id"), nullable=False)
-    duration_ms = db.Column(db.Integer, nullable=False)
-    preview_url = db.Column(db.String(500))
-    spotify_url = db.Column(db.String(500))
-
+    # Core mood / audio features
     energy = db.Column(db.Float)
     valence = db.Column(db.Float)
     tempo = db.Column(db.Float)
+
+    # Extended Spotify audio features
     danceability = db.Column(db.Float)
+    loudness = db.Column(db.Float)
     acousticness = db.Column(db.Float)
     instrumentalness = db.Column(db.Float)
-    speechiness = db.Column(db.Float)
     liveness = db.Column(db.Float)
-    loudness = db.Column(db.Float)
+    speechiness = db.Column(db.Float)
 
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(
-        db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
-    )
-
+    album_id = db.Column(db.String(64), db.ForeignKey("albums.id"))
     album = db.relationship("Album", back_populates="tracks")
+
     artists = db.relationship(
         "Artist",
         secondary="track_artists",
         back_populates="tracks",
     )
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "title": self.title,
+            "duration_ms": self.duration_ms,
+            "preview_url": self.preview_url,
+            "energy": self.energy,
+            "valence": self.valence,
+            "tempo": self.tempo,
+            "danceability": self.danceability,
+            "loudness": self.loudness,
+            "acousticness": self.acousticness,
+            "instrumentalness": self.instrumentalness,
+            "liveness": self.liveness,
+            "speechiness": self.speechiness,
+            "album": (
+                {
+                    "id": self.album.id,
+                    "title": self.album.title,
+                    "image_url": self.album.image_url,
+                }
+                if self.album
+                else None
+            ),
+            "artists": [
+                {
+                    "id": artist.id,
+                    "name": artist.name,
+                }
+                for artist in self.artists
+            ],
+        }
 
 
 class Playlist(db.Model):
@@ -97,25 +135,43 @@ class Playlist(db.Model):
     id = db.Column(db.String(64), primary_key=True)
     name = db.Column(db.String(255), nullable=False)
     description = db.Column(db.Text)
+
     type = db.Column(
         db.Enum("DailyMix", "Discover", "Radar", "MoodBoard", "Library"),
         nullable=False,
     )
+
     image_url = db.Column(db.String(500))
-    created_at = db.Column(db.DateTime)
-    updated_at = db.Column(db.DateTime)
+
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(
+        db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+    # 🔑 THIS is what your routes depend on
+    tracks = db.relationship(
+        "PlaylistTrack",
+        back_populates="playlist",
+        order_by="PlaylistTrack.position",
+        cascade="all, delete-orphan",
+    )
 
 
 class PlaylistTrack(db.Model):
     __tablename__ = "playlist_tracks"
 
     playlist_id = db.Column(
-        db.String(64), db.ForeignKey("playlists.id"), primary_key=True
+        db.String(64),
+        db.ForeignKey("playlists.id"),
+        primary_key=True,
     )
-    track_id = db.Column(db.String(50), db.ForeignKey("tracks.id"), primary_key=True)
+    track_id = db.Column(
+        db.String(64),
+        db.ForeignKey("tracks.id"),
+        primary_key=True,
+    )
 
     position = db.Column(db.Integer, nullable=False)
-    added_at = db.Column(db.DateTime)
-    play_count = db.Column(db.Integer)
-    skip_count = db.Column(db.Integer)
-    last_played_at = db.Column(db.DateTime)
+
+    playlist = db.relationship("Playlist", back_populates="tracks")
+    track = db.relationship("Track")

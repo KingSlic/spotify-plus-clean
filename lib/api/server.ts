@@ -27,6 +27,11 @@ export async function fetchPlaylists(): Promise<Playlist[]> {
   return res.json();
 }
 
+
+export async function getAllPlaylists(): Promise<Playlist[]> {
+  return fetchPlaylists();
+}
+
 export async function fetchPlaylistById(id: string): Promise<Playlist | null> {
   const res = await fetch(`${API_BASE}/playlists/${id}`, {
     cache: "no-store",
@@ -35,18 +40,20 @@ export async function fetchPlaylistById(id: string): Promise<Playlist | null> {
   return res.json();
 }
 
+/** ✅ FIXED ENDPOINT */
 export async function fetchTracksForPlaylist(
   playlistId: string,
 ): Promise<Track[]> {
-  const res = await fetch(`${API_BASE}/tracks/playlist/${playlistId}`, {
-    cache: "no-store",
-  });
+  const res = await fetch(
+    `${API_BASE}/playlists/${playlistId}/tracks`,
+    { cache: "no-store" }
+  );
   if (!res.ok) return [];
   return res.json();
 }
 
 export async function fetchSections() {
-  const res = await fetch("http://127.0.0.1:5000/api/sections", {
+  const res = await fetch(`${API_BASE}/sections`, {
     cache: "no-store",
   });
 

@@ -1,7 +1,5 @@
-import {
-  fetchPlaylistById,
-  fetchTracksForPlaylist,
-} from "@/lib/api/server";
+import { fetchPlaylistById, fetchTracksForPlaylist } from "@/lib/api/server";
+import TrackTable from "./TrackTable";
 
 export default async function PlaylistPage({
   params,
@@ -12,56 +10,46 @@ export default async function PlaylistPage({
   const tracks = await fetchTracksForPlaylist(params.id);
 
   if (!playlist) {
-    return <div className="p-6 text-white">Playlist not found.</div>;
+    return (
+      <div className="p-8 text-white">
+        <h1 className="text-2xl font-bold">Playlist not found</h1>
+      </div>
+    );
   }
 
   return (
-    <div className="p-6 text-white">
-      {/* Playlist title */}
-      <h1 className="text-3xl font-bold">
-        {playlist.name}
-      </h1>
+    <div className="p-8">
+      {/* Header */}
+      <div className="mb-8 flex items-end gap-6">
+        <div className="h-48 w-48 flex-shrink-0 rounded bg-neutral-800 overflow-hidden">
+          {playlist.image_url ? (
+            <img
+              src={playlist.image_url}
+              alt={playlist.name}
+              className="h-full w-full object-cover"
+            />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center text-6xl text-neutral-600">
+              🎵
+            </div>
+          )}
+        </div>
 
-      {/* 🔹 POLISH LINE (10-minute win) */}
-      <p className="text-xs uppercase tracking-wide text-neutral-500 mt-1 mb-2">
-        Backend-defined playlist · Real MySQL data
-      </p>
+        <div>
+          <p className="text-sm uppercase tracking-wide text-neutral-400">
+            Playlist
+          </p>
+          <h1 className="mt-2 text-5xl font-bold text-white">
+            {playlist.name}
+          </h1>
+          {playlist.description && (
+            <p className="mt-4 text-neutral-400">{playlist.description}</p>
+          )}
+        </div>
+      </div>
 
-      {/* Playlist description */}
-      <p className="text-neutral-400 mb-6">
-        {playlist.description}
-      </p>
-
-      {/* Track table */}
-      <table className="w-full text-sm">
-        <thead className="text-neutral-400 border-b border-neutral-800">
-          <tr>
-            <th className="text-left py-2">#</th>
-            <th className="text-left py-2">Track</th>
-            <th className="text-left py-2">Energy</th>
-            <th className="text-left py-2">Valence</th>
-            <th className="text-left py-2">Tempo</th>
-            <th className="text-left py-2">Why it’s here</th>
-          </tr>
-        </thead>
-        <tbody>
-          {tracks.map((t: any, i: number) => (
-            <tr
-              key={t.id}
-              className="border-b border-neutral-900 hover:bg-neutral-900"
-            >
-              <td className="py-2">{i + 1}</td>
-              <td className="py-2">{t.name}</td>
-              <td className="py-2">{t.energy ?? "-"}</td>
-              <td className="py-2">{t.valence ?? "-"}</td>
-              <td className="py-2">{t.tempo ?? "-"}</td>
-              <td className="py-2 text-xs text-neutral-400">
-                Position {t.position} · Plays {t.playCount ?? 0}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      {/* Tracks */}
+      <TrackTable tracks={tracks} />
     </div>
   );
 }

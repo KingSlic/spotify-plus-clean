@@ -1,8 +1,14 @@
-import { AudioPlayerProvider } from "@/app/contexts/AudioPlayerContext";
+import "./globals.css";
+
 import GlobalPlayer from "@/app/components/player/GlobalPlayer";
 import Sidebar from "@/app/components/Sidebar";
+import { AudioPlayerProvider } from "@/app/contexts/AudioPlayerContext";
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
     <html lang="en">
       <body className="bg-black text-white">
