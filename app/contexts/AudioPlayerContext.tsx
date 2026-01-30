@@ -1,3 +1,4 @@
+// app/contexts/AudioPlayerContext.tsx
 "use client";
 
 import React, {
@@ -19,8 +20,6 @@ type Track = {
   [key: string]: any;
 };
 
-type RepeatMode = "off" | "one" | "all";
-
 type PlayContext = {
   playlistId?: string;
   queue?: Track[];
@@ -40,6 +39,8 @@ const AudioPlayerContext = createContext<AudioPlayerContextType>({
   isPlaying: false,
 });
 
+const FALLBACK_PREVIEW_URL = "/audio/demo.mp3";
+
 export function AudioPlayerProvider({
   children,
 }: {
@@ -52,80 +53,41 @@ export function AudioPlayerProvider({
 
   const queueRef = useRef<Track[]>([]);
   const playlistIdRef = useRef<string | undefined>(undefined);
-  const [repeatMode, setRepeatMode] = useState<RepeatMode>("off");
 
   useEffect(() => {
-    if (!audioRef.current) {
-      audioRef.current = new Audio();
-    }
-
+    if (!audioRef.current) audioRef.current = new Audio();
     const audio = audioRef.current;
 
     const onPlay = () => setIsPlaying(true);
     const onPause = () => setIsPlaying(false);
 
-    const onEnded = () => {
-      if (!currentTrack) return;
-
-      if (repeatMode === "one") {
-        audio.currentTime = 0;
-        audio.play().catch(() => {});
-        return;
-      }
-
-      const q = queueRef.current;
-      if (!q.length) {
-        setIsPlaying(false);
-        return;
-      }
-
-      const idx = q.findIndex((t) => t.id === currentTrack.id);
-      const nextIdx = idx + 1;
-
-      if (nextIdx < q.length) {
-        internalPlay(q[nextIdx], {
-          queue: q,
-          playlistId: playlistIdRef.current,
-        });
-        return;
-      }
-
-      if (repeatMode === "all") {
-        internalPlay(q[0], {
-          queue: q,
-          playlistId: playlistIdRef.current,
-        });
-        return;
-      }
-
-      setIsPlaying(false);
-    };
-
     audio.addEventListener("play", onPlay);
     audio.addEventListener("pause", onPause);
-    audio.addEventListener("ended", onEnded);
 
     return () => {
       audio.removeEventListener("play", onPlay);
       audio.removeEventListener("pause", onPause);
-      audio.removeEventListener("ended", onEnded);
     };
-  }, [currentTrack, repeatMode]);
+  }, []);
 
   function internalPlay(track: Track, ctx?: PlayContext) {
     const audio = audioRef.current;
-    if (!audio || !track.preview_url) return;
+    if (!audio) return;
+
+    // ✅ Always set current track so GlobalPlayer updates
+    setCurrentTrack(track);
+
+    // ✅ Use preview_url if present, otherwise fallback demo MP3
+    const src = track.preview_url || FALLBACK_PREVIEW_URL;
 
     if (ctx?.queue) queueRef.current = ctx.queue;
     if (ctx?.playlistId) playlistIdRef.current = ctx.playlistId;
 
-    setCurrentTrack(track);
+    if (audio.src !== src) audio.src = src;
 
-    if (audio.src !== track.preview_url) {
-      audio.src = track.preview_url;
-    }
-
-    audio.play().catch(() => setIsPlaying(false));
+    audio.play().catch(() => {
+      setIsPlaying(false);
+    });
   }
 
   function playTrack(track: Track, ctx?: PlayContext) {
@@ -133,7 +95,9 @@ export function AudioPlayerProvider({
   }
 
   function pause() {
-    audioRef.current?.pause();
+    const audio = audioRef.current;
+    if (!audio) return;
+    audio.pause();
   }
 
   const value = useMemo<AudioPlayerContextType>(
@@ -154,9 +118,5 @@ export function AudioPlayerProvider({
 }
 
 export function useAudioPlayer() {
-  const ctx = useContext(AudioPlayerContext);
-  if (!ctx) {
-    throw new Error("useAudioPlayer must be used within AudioPlayerProvider");
-  }
-  return ctx;
+  return useContext(AudioPlayerContext);
 }
