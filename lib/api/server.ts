@@ -27,7 +27,6 @@ export async function fetchPlaylists(): Promise<Playlist[]> {
   return res.json();
 }
 
-
 export async function getAllPlaylists(): Promise<Playlist[]> {
   return fetchPlaylists();
 }
@@ -44,10 +43,9 @@ export async function fetchPlaylistById(id: string): Promise<Playlist | null> {
 export async function fetchTracksForPlaylist(
   playlistId: string,
 ): Promise<Track[]> {
-  const res = await fetch(
-    `${API_BASE}/playlists/${playlistId}/tracks`,
-    { cache: "no-store" }
-  );
+  const res = await fetch(`${API_BASE}/playlists/${playlistId}/tracks`, {
+    cache: "no-store",
+  });
   if (!res.ok) return [];
   return res.json();
 }
@@ -58,6 +56,7 @@ export async function fetchSections() {
   });
 
   if (!res.ok) {
+    console.error("Failed to fetch sections:", res.status, res.statusText);
     throw new Error("Failed to fetch sections");
   }
 

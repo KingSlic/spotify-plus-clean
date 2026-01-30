@@ -1,5 +1,7 @@
-import { fetchPlaylistById, fetchTracksForPlaylist } from "@/lib/api/client";
+import { fetchPlaylistById, fetchTracksForPlaylist } from "@/lib/api/server";
+import Image from "next/image";
 import { computePlaylistAnalytics } from "./analytics";
+import PlaylistActions from "./PlaylistActions";
 import TrackTable from "./TrackTable";
 
 export default async function PlaylistPage({
@@ -7,47 +9,45 @@ export default async function PlaylistPage({
 }: {
   params: { id: string };
 }) {
-  // Fetch data from backend
   const playlist = await fetchPlaylistById(params.id);
   const tracks = await fetchTracksForPlaylist(params.id);
 
-  // Handle not found (real 404 only)
   if (!playlist) {
-    return (
-      <div className="p-6 text-white">
-        <h1 className="text-2xl font-bold">Playlist not found</h1>
-        <p className="mt-2 text-neutral-400">
-          This playlist does not exist or may have been removed.
-        </p>
-      </div>
-    );
+    return <div className="p-6 text-white">Playlist not found</div>;
   }
 
-  // Read-only analytics (client-safe, deterministic)
   const analytics = computePlaylistAnalytics(tracks);
 
   return (
-    <div className="p-6 text-white">
-      {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold">{playlist.name}</h1>
+    <div className="px-6 pt-6 text-white">
+      {/* HEADER */}
+      <div className="flex items-end gap-6 mb-8">
+        <Image
+          src={playlist.image_url || "/placeholder-playlist.png"}
+          alt={playlist.name}
+          width={200}
+          height={200}
+          className="rounded"
+        />
 
-        {playlist.description && (
-          <p className="mt-2 text-neutral-400">{playlist.description}</p>
-        )}
+        <div className="flex-1">
+          <p className="uppercase text-sm text-gray-400">Playlist</p>
+          <h1 className="text-5xl font-bold mb-2">{playlist.name}</h1>
+          <p className="text-gray-400 mb-4">{playlist.description}</p>
 
-        {/* Analytics */}
-        {analytics && (
-          <div className="mt-4 flex flex-wrap gap-4 text-sm text-neutral-400">
+          {/* ANALYTICS SUMMARY */}
+          <div className="flex gap-6 text-sm text-gray-300">
             <span>⚡ Energy: {analytics.energy.toFixed(2)}</span>
-            <span>💓 Valence: {analytics.valence.toFixed(2)}</span>
-            <span>🎵 Tempo: {Math.round(analytics.tempo)} BPM</span>
+            <span>💗 Valence: {analytics.valence.toFixed(2)}</span>
             <span>🎧 Mood: {analytics.mood}</span>
           </div>
-        )}
+
+          {/* ACTIONS (CLIENT) */}
+          <PlaylistActions tracks={tracks} />
+        </div>
       </div>
 
-      {/* Tracks */}
+      {/* TRACK TABLE */}
       <TrackTable tracks={tracks} />
     </div>
   );

@@ -1,77 +1,68 @@
 "use client";
 
 import { useAudioPlayer } from "@/app/contexts/AudioPlayerContext";
-import { Track } from "@/types/track";
+import { Track } from "@/lib/types/track";
 
 export default function TrackTable({ tracks }: { tracks: Track[] }) {
-  const { play, currentTrack } = useAudioPlayer();
+  const { playTrack, currentTrack } = useAudioPlayer();
 
-  if (!tracks.length) {
-    return (
-      <div className="text-neutral-400">This playlist has no tracks yet.</div>
-    );
+  function handlePlay(track: Track) {
+    playTrack(track, { queue: tracks });
   }
 
   return (
-    <table className="w-full text-left text-sm">
-      <thead className="border-b border-neutral-700">
-        <tr className="text-neutral-400">
-          <th className="py-2 pr-4">#</th>
-          <th className="py-2">Title</th>
-          <th className="py-2">Artist</th>
-          <th className="py-2">Album</th>
-          <th className="py-2 text-right">Duration</th>
+    <table className="w-full text-sm">
+      <thead className="border-b border-white/10 text-gray-400">
+        <tr>
+          <th className="w-12 text-right pr-4">#</th>
+          <th className="text-left">Title</th>
+          <th className="text-left">Artist</th>
+          <th className="text-right pr-2">Duration</th>
         </tr>
       </thead>
 
       <tbody>
         {tracks.map((track, i) => {
-          const isActive = currentTrack?.id === track.id;
+          const isCurrent = currentTrack?.id === track.id;
 
           return (
             <tr
               key={track.id}
-              onClick={() =>
-                track.preview_url && play(track.preview_url, track)
-              }
-              className={[
-                "group cursor-pointer border-b border-neutral-800",
-                isActive ? "bg-neutral-800/70" : "hover:bg-neutral-800/50",
-              ].join(" ")}
+              className={`group h-12 cursor-pointer hover:bg-white/10 ${
+                isCurrent ? "bg-white/5" : ""
+              }`}
+              onDoubleClick={() => handlePlay(track)}
             >
-              {/* Index / Play indicator */}
-              <td className="relative py-2 pr-4 text-neutral-500 w-10">
-                {isActive ? (
-                  <span className="text-green-500">▶</span>
-                ) : (
-                  <>
-                    <span className="group-hover:hidden">{i + 1}</span>
-                    <span className="hidden group-hover:inline text-white">
-                      ▶
-                    </span>
-                  </>
-                )}
+              {/* index / play */}
+              <td className="text-right pr-4 text-gray-400">
+                <span className="group-hover:hidden">{i + 1}</span>
+                <button
+                  onClick={() => handlePlay(track)}
+                  className="hidden group-hover:inline text-white"
+                >
+                  ▶
+                </button>
               </td>
 
-              <td
-                className={[
-                  "py-2 font-medium",
-                  isActive ? "text-green-500" : "text-white",
-                ].join(" ")}
-              >
+              {/* title */}
+              <td className={isCurrent ? "text-green-500 font-semibold" : ""}>
                 {track.title}
               </td>
 
-              <td className="py-2 text-neutral-300">
-                {track.artists.map((a) => a.name).join(", ")}
+              {/* artist */}
+              <td className="text-gray-300">
+                {track.artists?.map((a) => a.name).join(", ")}
               </td>
 
-              <td className="py-2 text-neutral-400">
-                {track.album?.title ?? "—"}
-              </td>
-
-              <td className="py-2 text-right text-neutral-400">
-                {formatDuration(track.duration_ms)}
+              {/* duration */}
+              <td className="text-right pr-2 text-gray-400">
+                {track.duration_ms
+                  ? Math.floor(track.duration_ms / 60000) +
+                    ":" +
+                    String(
+                      Math.floor((track.duration_ms % 60000) / 1000),
+                    ).padStart(2, "0")
+                  : "--:--"}
               </td>
             </tr>
           );
@@ -79,13 +70,4 @@ export default function TrackTable({ tracks }: { tracks: Track[] }) {
       </tbody>
     </table>
   );
-}
-
-function formatDuration(ms?: number) {
-  if (!ms) return "—";
-  const minutes = Math.floor(ms / 60000);
-  const seconds = Math.floor((ms % 60000) / 1000)
-    .toString()
-    .padStart(2, "0");
-  return `${minutes}:${seconds}`;
 }
