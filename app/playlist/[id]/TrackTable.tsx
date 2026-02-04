@@ -19,18 +19,20 @@ export default function TrackTable({ tracks }: { tracks: Track[] }) {
 
       <tbody>
         {tracks.map((track, i) => {
+          const hasPreview = Boolean(track.preview_url);
           const isActive = currentTrack?.id === track.id;
 
           return (
             <tr
               key={track.id}
               onClick={() => {
-                if (!track.preview_url) return;
-                playTrack(track, { queue: tracks });
+                if (!hasPreview) return;
+                playTrack(track); // 🔑 do NOT pass queue here
               }}
-              className={`cursor-pointer ${
+              className={`transition-colors ${
                 isActive ? "bg-neutral-800" : "hover:bg-neutral-800"
-              }`}
+              } ${hasPreview ? "cursor-pointer" : "opacity-60"}`}
+              title={!hasPreview ? "Preview unavailable" : undefined}
             >
               <td className="px-4 py-2 text-neutral-400">
                 {isActive && isPlaying ? "▶" : i + 1}
@@ -39,7 +41,7 @@ export default function TrackTable({ tracks }: { tracks: Track[] }) {
               <td className="px-4 py-2 text-white">{track.title}</td>
 
               <td className="px-4 py-2 text-neutral-400">
-                {track.artists.map((a) => a.name).join(", ")}
+                {track.artists?.map((a) => a.name).join(", ")}
               </td>
 
               <td className="px-4 py-2 text-right text-neutral-400">
@@ -53,7 +55,7 @@ export default function TrackTable({ tracks }: { tracks: Track[] }) {
   );
 }
 
-function formatDuration(ms?: number) {
+function formatDuration(ms?: number | null) {
   if (!ms) return "—";
   const m = Math.floor(ms / 60000);
   const s = Math.floor((ms % 60000) / 1000)
