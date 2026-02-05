@@ -1,5 +1,5 @@
 import json
-from app.database import db
+from app.extensions import db
 from app.models import Track
 from app import create_app
 
