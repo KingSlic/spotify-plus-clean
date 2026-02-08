@@ -2,12 +2,7 @@ import HomeSection from "@/app/components/HomeSection";
 import { fetchPlaylists, fetchSections } from "@/lib/api/server";
 import { Playlist } from "@/lib/types/playlist";
 
-/**
- * Home section → playlist policy
- *
- * Sections are views, not storage.
- * Membership is computed from playlist semantics.
- */
+
 function playlistsForSection(
   sectionId: string,
   playlists: Playlist[],
@@ -22,8 +17,6 @@ function playlistsForSection(
       return playlists.filter((p) => p.type === "Discover");
 
     case "recent":
-      // Temporary recency policy
-      // (replace later with play history / signals)
       return playlists.slice(0, 6);
 
     default:

@@ -1,65 +1,96 @@
 "use client";
 
+import TrackRow from "@/app/components/TrackRow";
 import { useAudioPlayer } from "@/app/contexts/AudioPlayerContext";
-import { Track } from "@/lib/types/track";
+import { useState } from "react";
 
-export default function TrackTable({ tracks }: { tracks: Track[] }) {
-  const { playTrack, currentTrack, isPlaying } = useAudioPlayer();
+type Track = {
+  id: string;
+  title: string;
+  duration_ms: number | null;
+  preview_url: string | null;
+  artists?: { id: string; name: string }[];
+};
+
+const API_BASE = "http://127.0.0.1:5000/api";
+
+export default function TrackTable({
+  tracks,
+  playlistId,
+}: {
+  tracks: Track[];
+  playlistId: string;
+}) {
+  const { currentTrack, skipToTrack, pause } = useAudioPlayer();
+
+  const [localTracks, setLocalTracks] = useState<Track[]>(tracks);
+
+  async function removeTrackFromPlaylist(trackId: string) {
+    const snapshot = localTracks;
+
+    const removedIndex = localTracks.findIndex((t) => t.id === trackId);
+    const isRemovingCurrent = currentTrack?.id === trackId;
+
+    // Optimistic remove
+    const nextTracks = localTracks.filter((t) => t.id !== trackId);
+    setLocalTracks(nextTracks);
+
+    try {
+      const res = await fetch(
+        `${API_BASE}/playlists/${playlistId}/tracks/${trackId}`,
+        { method: "DELETE" },
+      );
+
+      if (!res.ok) throw new Error("Delete failed");
+
+      // 🎧 AUTO-SKIP LOGIC
+      if (isRemovingCurrent) {
+        const nextPlayable =
+          nextTracks.slice(removedIndex).find((t) => t.preview_url) ||
+          nextTracks
+            .slice(0, removedIndex)
+            .reverse()
+            .find((t) => t.preview_url);
+
+        if (nextPlayable) {
+          skipToTrack(nextPlayable);
+        } else {
+          pause();
+        }
+      }
+    } catch (err) {
+      console.error("Delete failed, rolling back", err);
+      setLocalTracks(snapshot);
+    }
+  }
+
+  if (localTracks.length === 0) {
+    return (
+      <p className="mt-6 text-neutral-400">This playlist has no tracks.</p>
+    );
+  }
 
   return (
-    <table className="w-full text-sm text-left">
+    <table className="w-full text-sm text-left border-collapse">
       <thead className="text-neutral-400 border-b border-neutral-800">
         <tr>
-          <th className="px-4 py-2 w-10">#</th>
+          <th className="w-12 px-4 py-2">#</th>
           <th className="px-4 py-2">Title</th>
-          <th className="px-4 py-2">Artist</th>
           <th className="px-4 py-2 text-right">Duration</th>
+          <th className="w-12 px-4 py-2" />
         </tr>
       </thead>
 
       <tbody>
-        {tracks.map((track, i) => {
-          const hasPreview = Boolean(track.preview_url);
-          const isActive = currentTrack?.id === track.id;
-
-          return (
-            <tr
-              key={track.id}
-              onClick={() => {
-                if (!hasPreview) return;
-                playTrack(track); // 🔑 do NOT pass queue here
-              }}
-              className={`transition-colors ${
-                isActive ? "bg-neutral-800" : "hover:bg-neutral-800"
-              } ${hasPreview ? "cursor-pointer" : "opacity-60"}`}
-              title={!hasPreview ? "Preview unavailable" : undefined}
-            >
-              <td className="px-4 py-2 text-neutral-400">
-                {isActive && isPlaying ? "▶" : i + 1}
-              </td>
-
-              <td className="px-4 py-2 text-white">{track.title}</td>
-
-              <td className="px-4 py-2 text-neutral-400">
-                {track.artists?.map((a) => a.name).join(", ")}
-              </td>
-
-              <td className="px-4 py-2 text-right text-neutral-400">
-                {formatDuration(track.duration_ms)}
-              </td>
-            </tr>
-          );
-        })}
+        {localTracks.map((track, index) => (
+          <TrackRow
+            key={track.id}
+            track={track}
+            index={index}
+            onRemove={removeTrackFromPlaylist}
+          />
+        ))}
       </tbody>
     </table>
   );
-}
-
-function formatDuration(ms?: number | null) {
-  if (!ms) return "—";
-  const m = Math.floor(ms / 60000);
-  const s = Math.floor((ms % 60000) / 1000)
-    .toString()
-    .padStart(2, "0");
-  return `${m}:${s}`;
 }

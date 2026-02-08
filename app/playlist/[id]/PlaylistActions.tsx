@@ -1,32 +1,45 @@
 "use client";
 
 import { useAudioPlayer } from "@/app/contexts/AudioPlayerContext";
-import { Track } from "@/lib/types/track";
+import { useMemo } from "react";
+
+type Track = {
+  id: string;
+  preview_url: string | null;
+};
 
 export default function PlaylistActions({ tracks }: { tracks: Track[] }) {
   const { playTrack } = useAudioPlayer();
 
-  function handlePlayAll() {
-    if (!tracks.length) return;
-    playTrack(tracks[0], { queue: tracks });
+  const firstPlayable = useMemo(
+    () => tracks.find((t) => Boolean(t.preview_url)) ?? null,
+    [tracks],
+  );
+
+  function handlePlay() {
+    if (!firstPlayable) return;
+
+    const startIndex = tracks.findIndex((t) => t.id === firstPlayable.id);
+
+    setContext(tracks, startIndex);
+    playTrack(firstPlayable);
   }
 
   return (
-    <div className="flex items-center gap-4 mt-4">
+    <div className="mt-5 flex items-center gap-3">
       <button
-        onClick={handlePlayAll}
-        className="bg-green-500 text-black px-6 py-2 rounded-full font-semibold hover:scale-105 transition"
+        onClick={handlePlay}
+        disabled={!firstPlayable}
+        className="flex items-center rounded-full bg-green-500 px-8 py-3 font-semibold text-white hover:bg-green-400 hover:scale-[1.02] transition disabled:opacity-40"
       >
-        ▶ Play
+        <span className="mr-2 flex h-6 w-6 items-center justify-center">
+          <svg viewBox="0 0 24 24" className="h-5 w-5" fill="white" aria-hidden>
+            <path d="M8 5v14l11-7z" />
+          </svg>
+        </span>
+
+        <span className="leading-none">Play</span>
       </button>
-
-      <button className="border border-gray-600 px-4 py-2 rounded">Add</button>
-
-      <button className="border border-gray-600 px-4 py-2 rounded">
-        Remove
-      </button>
-
-      <button className="text-sm text-gray-400 ml-4">Select All</button>
     </div>
   );
 }

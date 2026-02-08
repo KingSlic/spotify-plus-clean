@@ -48,7 +48,7 @@ export default async function PlaylistPage({
       </div>
 
       {/* TRACK TABLE */}
-      <TrackTable tracks={tracks} />
+      <TrackTable tracks={tracks} playlistId={playlist.id} />
     </div>
   );
 }

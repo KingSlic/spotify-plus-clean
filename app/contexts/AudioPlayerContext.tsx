@@ -1,7 +1,6 @@
-// app/contexts/AudioPlayerContext.tsx
 "use client";
 
-import React, {
+import {
   createContext,
   useContext,
   useEffect,
@@ -15,31 +14,25 @@ type Track = {
   title: string;
   preview_url: string | null;
   duration_ms?: number | null;
-  album?: { id: string; title: string; image_url?: string | null } | null;
-  artists?: { id: string; name: string }[];
-  [key: string]: any;
-};
-
-type PlayContext = {
-  playlistId?: string;
-  queue?: Track[];
+  album?: { image_url?: string | null } | null;
+  artists?: { name: string }[];
 };
 
 type AudioPlayerContextType = {
-  playTrack: (track: Track, ctx?: PlayContext) => void;
-  pause: () => void;
   currentTrack: Track | null;
   isPlaying: boolean;
+  currentTime: number;
+  duration: number;
+  volume: number;
+
+  playTrack: (track: Track) => void;
+  pause: () => void;
+  resume: () => void;
+  seek: (time: number) => void;
+  setVolume: (v: number) => void;
 };
 
-const AudioPlayerContext = createContext<AudioPlayerContextType>({
-  playTrack: () => {},
-  pause: () => {},
-  currentTrack: null,
-  isPlaying: false,
-});
-
-const FALLBACK_PREVIEW_URL = "/audio/demo.mp3";
+const AudioPlayerContext = createContext<AudioPlayerContextType | null>(null);
 
 export function AudioPlayerProvider({
   children,
@@ -50,64 +43,91 @@ export function AudioPlayerProvider({
 
   const [currentTrack, setCurrentTrack] = useState<Track | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [volume, setVolumeState] = useState(1);
 
-  const queueRef = useRef<Track[]>([]);
-  const playlistIdRef = useRef<string | undefined>(undefined);
-
+  /** Init audio element */
   useEffect(() => {
-    if (!audioRef.current) audioRef.current = new Audio();
+    if (!audioRef.current) {
+      audioRef.current = new Audio();
+    }
+
     const audio = audioRef.current;
 
     const onPlay = () => setIsPlaying(true);
     const onPause = () => setIsPlaying(false);
+    const onTimeUpdate = () => setCurrentTime(audio.currentTime);
+    const onLoaded = () => setDuration(audio.duration || 0);
+    const onEnded = () => {
+      setIsPlaying(false);
+    };
 
     audio.addEventListener("play", onPlay);
     audio.addEventListener("pause", onPause);
+    audio.addEventListener("timeupdate", onTimeUpdate);
+    audio.addEventListener("loadedmetadata", onLoaded);
+    audio.addEventListener("ended", onEnded);
 
     return () => {
       audio.removeEventListener("play", onPlay);
       audio.removeEventListener("pause", onPause);
+      audio.removeEventListener("timeupdate", onTimeUpdate);
+      audio.removeEventListener("loadedmetadata", onLoaded);
+      audio.removeEventListener("ended", onEnded);
     };
   }, []);
 
-  function internalPlay(track: Track, ctx?: PlayContext) {
+  function playTrack(track: Track) {
     const audio = audioRef.current;
-    if (!audio) return;
+    if (!audio || !track.preview_url) return;
 
-    // ✅ Always set current track so GlobalPlayer updates
+    if (audio.src !== track.preview_url) {
+      audio.src = track.preview_url;
+    }
+
     setCurrentTrack(track);
-
-    // ✅ Use preview_url if present, otherwise fallback demo MP3
-    const src = track.preview_url || FALLBACK_PREVIEW_URL;
-
-    if (ctx?.queue) queueRef.current = ctx.queue;
-    if (ctx?.playlistId) playlistIdRef.current = ctx.playlistId;
-
-    if (audio.src !== src) audio.src = src;
-
     audio.play().catch(() => {
       setIsPlaying(false);
     });
   }
 
-  function playTrack(track: Track, ctx?: PlayContext) {
-    internalPlay(track, ctx);
-  }
-
   function pause() {
-    const audio = audioRef.current;
-    if (!audio) return;
-    audio.pause();
+    audioRef.current?.pause();
   }
 
-  const value = useMemo<AudioPlayerContextType>(
+  function resume() {
+    audioRef.current?.play().catch(() => {});
+  }
+
+  function seek(time: number) {
+    const audio = audioRef.current;
+    if (!audio || !Number.isFinite(time)) return;
+    audio.currentTime = Math.min(Math.max(time, 0), audio.duration || 0);
+  }
+
+  function setVolume(v: number) {
+    const audio = audioRef.current;
+    const clamped = Math.min(Math.max(v, 0), 1);
+    if (!audio) return;
+    audio.volume = clamped;
+    setVolumeState(clamped);
+  }
+
+  const value = useMemo(
     () => ({
-      playTrack,
-      pause,
       currentTrack,
       isPlaying,
+      currentTime,
+      duration,
+      volume,
+      playTrack,
+      pause,
+      resume,
+      seek,
+      setVolume,
     }),
-    [currentTrack, isPlaying],
+    [currentTrack, isPlaying, currentTime, duration, volume],
   );
 
   return (
@@ -118,5 +138,9 @@ export function AudioPlayerProvider({
 }
 
 export function useAudioPlayer() {
-  return useContext(AudioPlayerContext);
+  const ctx = useContext(AudioPlayerContext);
+  if (!ctx) {
+    throw new Error("useAudioPlayer must be used inside AudioPlayerProvider");
+  }
+  return ctx;
 }
