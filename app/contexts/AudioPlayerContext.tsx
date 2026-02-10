@@ -25,11 +25,15 @@ type AudioPlayerContextType = {
   duration: number;
   volume: number;
 
+  onDurationResolved?: (trackId: string, seconds: number) => void;
   playTrack: (track: Track) => void;
   pause: () => void;
   resume: () => void;
   seek: (time: number) => void;
   setVolume: (v: number) => void;
+
+  /** 🔑 allow playback controller to hook into audio end */
+  setOnEnded: (cb: (() => void) | null) => void;
 };
 
 const AudioPlayerContext = createContext<AudioPlayerContextType | null>(null);
@@ -40,6 +44,7 @@ export function AudioPlayerProvider({
   children: React.ReactNode;
 }) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const onEndedRef = useRef<(() => void) | null>(null);
 
   const [currentTrack, setCurrentTrack] = useState<Track | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -47,7 +52,6 @@ export function AudioPlayerProvider({
   const [duration, setDuration] = useState(0);
   const [volume, setVolumeState] = useState(1);
 
-  /** Init audio element */
   useEffect(() => {
     if (!audioRef.current) {
       audioRef.current = new Audio();
@@ -58,9 +62,18 @@ export function AudioPlayerProvider({
     const onPlay = () => setIsPlaying(true);
     const onPause = () => setIsPlaying(false);
     const onTimeUpdate = () => setCurrentTime(audio.currentTime);
-    const onLoaded = () => setDuration(audio.duration || 0);
+    const onLoaded = () => {
+      const d = audio.duration || 0;
+      setDuration(d);
+
+      if (currentTrack && onDurationResolved) {
+        onDurationResolved(currentTrack.id, d);
+      }
+    };
+
     const onEnded = () => {
       setIsPlaying(false);
+      onEndedRef.current?.();
     };
 
     audio.addEventListener("play", onPlay);
@@ -114,6 +127,10 @@ export function AudioPlayerProvider({
     setVolumeState(clamped);
   }
 
+  function setOnEnded(cb: (() => void) | null) {
+    onEndedRef.current = cb;
+  }
+
   const value = useMemo(
     () => ({
       currentTrack,
@@ -126,6 +143,7 @@ export function AudioPlayerProvider({
       resume,
       seek,
       setVolume,
+      setOnEnded,
     }),
     [currentTrack, isPlaying, currentTime, duration, volume],
   );

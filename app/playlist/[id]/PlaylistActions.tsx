@@ -1,6 +1,7 @@
 "use client";
 
 import { useAudioPlayer } from "@/app/contexts/AudioPlayerContext";
+import { usePlayback } from "../../contexts/PlaybackContext";
 import { useMemo } from "react";
 
 type Track = {
@@ -10,6 +11,7 @@ type Track = {
 
 export default function PlaylistActions({ tracks }: { tracks: Track[] }) {
   const { playTrack } = useAudioPlayer();
+  const { setQueue } = usePlayback();
 
   const firstPlayable = useMemo(
     () => tracks.find((t) => Boolean(t.preview_url)) ?? null,
@@ -21,8 +23,7 @@ export default function PlaylistActions({ tracks }: { tracks: Track[] }) {
 
     const startIndex = tracks.findIndex((t) => t.id === firstPlayable.id);
 
-    setContext(tracks, startIndex);
-    playTrack(firstPlayable);
+    setQueue(tracks, startIndex);
   }
 
   return (

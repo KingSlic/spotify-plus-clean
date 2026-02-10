@@ -1,6 +1,7 @@
 "use client";
 
-import { createContext, useContext, useMemo, useState } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
+import { useAudioPlayer } from "./AudioPlayerContext";
 
 type Track = {
   id: string;
@@ -9,74 +10,116 @@ type Track = {
 
 type PlaybackContextType = {
   tracks: Track[];
-  currentIndex: number;
+  index: number;
   hasNext: boolean;
   hasPrev: boolean;
 
-  setContext: (tracks: Track[], startIndex: number) => void;
-  next: () => number | null;
-  prev: () => number | null;
-  removeTrack: (trackId: string) => void;
+  setQueue: (tracks: Track[], index: number) => void;
+  next: () => void;
+  prev: () => void;
+  onTrackRemoved: (trackId: string) => void;
 };
 
 const PlaybackContext = createContext<PlaybackContextType | null>(null);
 
-export function PlaybackProvider({ children }: { children: React.ReactNode }) {
-  const [tracks, setTracks] = useState<Track[]>([]);
-  const [currentIndex, setCurrentIndex] = useState(-1);
+function isPlayable(t: Track) {
+  return Boolean(t.preview_url);
+}
 
-  function setContext(tracks: Track[], startIndex: number) {
-    setTracks(tracks);
-    setCurrentIndex(startIndex);
+export function PlaybackProvider({ children }: { children: React.ReactNode }) {
+  const audio = useAudioPlayer();
+
+  const [tracks, setTracks] = useState<Track[]>([]);
+  const [index, setIndex] = useState(0);
+
+  function playAt(i: number) {
+    const t = tracks[i];
+    if (t && isPlayable(t)) {
+      audio.playTrack(t as any);
+    }
+  }
+
+  function setQueue(nextTracks: Track[], startIndex: number) {
+    setTracks(nextTracks);
+
+    let i = startIndex;
+    if (!isPlayable(nextTracks[i])) {
+      i = nextTracks.findIndex(isPlayable);
+    }
+    if (i < 0) return;
+
+    setIndex(i);
+    queueMicrotask(() => playAt(i));
   }
 
   function next() {
-    const nextIndex = currentIndex + 1;
-    if (nextIndex >= tracks.length) return null;
-    setCurrentIndex(nextIndex);
-    return nextIndex;
+    for (let i = index + 1; i < tracks.length; i++) {
+      if (isPlayable(tracks[i])) {
+        setIndex(i);
+        playAt(i);
+        return;
+      }
+    }
   }
 
   function prev() {
-    const prevIndex = currentIndex - 1;
-    if (prevIndex < 0) return null;
-    setCurrentIndex(prevIndex);
-    return prevIndex;
-  }
-
-  function removeTrack(trackId: string) {
-    setTracks((prev) => {
-      const idx = prev.findIndex((t) => t.id === trackId);
-      if (idx === -1) return prev;
-
-      const next = prev.filter((t) => t.id !== trackId);
-
-      if (idx < currentIndex) {
-        setCurrentIndex((i) => i - 1);
-      } else if (idx === currentIndex) {
-        setCurrentIndex((i) => (i >= next.length ? next.length - 1 : i));
+    for (let i = index - 1; i >= 0; i--) {
+      if (isPlayable(tracks[i])) {
+        setIndex(i);
+        playAt(i);
+        return;
       }
-
-      return next;
-    });
+    }
   }
 
-  const value = useMemo(
-    () => ({
-      tracks,
-      currentIndex,
-      hasNext: currentIndex >= 0 && currentIndex < tracks.length - 1,
-      hasPrev: currentIndex > 0,
-      setContext,
-      next,
-      prev,
-      removeTrack,
-    }),
-    [tracks, currentIndex],
-  );
+  function onTrackRemoved(trackId: string) {
+    const idx = tracks.findIndex((t) => t.id === trackId);
+    if (idx === -1) return;
+
+    const nextTracks = tracks.filter((t) => t.id !== trackId);
+    setTracks(nextTracks);
+
+    if (idx < index) {
+      setIndex((i) => i - 1);
+      return;
+    }
+
+    if (idx === index) {
+      for (let i = index; i < nextTracks.length; i++) {
+        if (isPlayable(nextTracks[i])) {
+          setIndex(i);
+          playAt(i);
+          return;
+        }
+      }
+      audio.pause();
+    }
+  }
+
+  /** 🔥 AUTO-ADVANCE ON TRACK END */
+  useEffect(() => {
+    audio.setOnEnded(() => {
+      next();
+    });
+
+    return () => {
+      audio.setOnEnded(null);
+    };
+  }, [audio, index, tracks]);
 
   return (
-    <PlaybackContext.Provider value={value}>
+    <PlaybackContext.Provider
+      value={{
+        tracks,
+        index,
+        hasNext: tracks.slice(index + 1).some(isPlayable),
+        hasPrev: tracks.slice(0, index).some(isPlayable),
+        setQueue,
+        next,
+        prev,
+        onTrackRemoved,
+      }}
+    >
       {children}
     </PlaybackContext.Provider>
   );
@@ -84,8 +127,6 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
 
 export function usePlayback() {
   const ctx = useContext(PlaybackContext);
-  if (!ctx) {
-    throw new Error("usePlayback must be used inside PlaybackProvider");
-  }
+  if (!ctx) throw new Error("usePlayback must be used within PlaybackProvider");
   return ctx;
 }
