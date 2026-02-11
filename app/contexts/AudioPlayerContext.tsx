@@ -25,14 +25,13 @@ type AudioPlayerContextType = {
   duration: number;
   volume: number;
 
-  onDurationResolved?: (trackId: string, seconds: number) => void;
   playTrack: (track: Track) => void;
   pause: () => void;
   resume: () => void;
   seek: (time: number) => void;
   setVolume: (v: number) => void;
 
-  /** 🔑 allow playback controller to hook into audio end */
+  /** 🔑 single hook for end-of-track */
   setOnEnded: (cb: (() => void) | null) => void;
 };
 
@@ -62,15 +61,7 @@ export function AudioPlayerProvider({
     const onPlay = () => setIsPlaying(true);
     const onPause = () => setIsPlaying(false);
     const onTimeUpdate = () => setCurrentTime(audio.currentTime);
-    const onLoaded = () => {
-      const d = audio.duration || 0;
-      setDuration(d);
-
-      if (currentTrack && onDurationResolved) {
-        onDurationResolved(currentTrack.id, d);
-      }
-    };
-
+    const onLoaded = () => setDuration(audio.duration || 0);
     const onEnded = () => {
       setIsPlaying(false);
       onEndedRef.current?.();
@@ -96,10 +87,15 @@ export function AudioPlayerProvider({
     if (!audio || !track.preview_url) return;
 
     if (audio.src !== track.preview_url) {
+      audio.pause();
       audio.src = track.preview_url;
+      audio.load();
+      setCurrentTime(0);
+      setDuration(0);
     }
 
     setCurrentTrack(track);
+
     audio.play().catch(() => {
       setIsPlaying(false);
     });
@@ -115,8 +111,9 @@ export function AudioPlayerProvider({
 
   function seek(time: number) {
     const audio = audioRef.current;
-    if (!audio || !Number.isFinite(time)) return;
-    audio.currentTime = Math.min(Math.max(time, 0), audio.duration || 0);
+    if (!audio || !Number.isFinite(audio.duration) || audio.duration <= 0)
+      return;
+    audio.currentTime = Math.min(Math.max(time, 0), audio.duration);
   }
 
   function setVolume(v: number) {

@@ -2,7 +2,7 @@
 
 import TrackRow from "@/app/components/TrackRow";
 import { usePlayback } from "@/app/contexts/PlaybackContext";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 
 type Track = {
   id: string;
@@ -25,43 +25,17 @@ export default function TrackTable({
 
   const [localTracks, setLocalTracks] = useState<Track[]>(tracks);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [isBulkBusy, setIsBulkBusy] = useState(false);
 
-  /* ---------- ADD / REMOVE ---------- */
+  const isInPlaylist = (id: string) => localTracks.some((t) => t.id === id);
 
-  async function removeTrack(trackId: string) {
-    setLocalTracks((prev) => prev.filter((t) => t.id !== trackId));
-    onTrackRemoved(trackId);
-
-    await fetch(`${API_BASE}/playlists/${playlistId}/tracks/${trackId}`, {
-      method: "DELETE",
-    });
-  }
-
-  async function addTrack(track: Track) {
-    setLocalTracks((prev) => [...prev, track]);
-
-    await fetch(`${API_BASE}/playlists/${playlistId}/tracks`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ track_id: track.id }),
-    });
-  }
-
-  /* ---------- SELECTION ---------- */
-
-  const visibleIds = useMemo(() => localTracks.map((t) => t.id), [localTracks]);
-
-  const allSelected =
-    selectedIds.size === visibleIds.length && visibleIds.length > 0;
-  const noneSelected = selectedIds.size === 0;
-  const isIndeterminate = !allSelected && !noneSelected;
+  const allSelected = tracks.length > 0 && selectedIds.size === tracks.length;
+  const someSelected = selectedIds.size > 0 && selectedIds.size < tracks.length;
 
   function toggleSelectAll() {
-    setSelectedIds(allSelected ? new Set() : new Set(visibleIds));
+    setSelectedIds(allSelected ? new Set() : new Set(tracks.map((t) => t.id)));
   }
 
-  function toggleRow(id: string) {
+  function toggleSelect(id: string) {
     setSelectedIds((prev) => {
       const next = new Set(prev);
       next.has(id) ? next.delete(id) : next.add(id);
@@ -69,99 +43,102 @@ export default function TrackTable({
     });
   }
 
-  /* ---------- BULK ACTION ---------- */
+  async function removeTracks(ids: string[]) {
+    const snapshot = localTracks;
 
-  const selectedTracks = tracks.filter((t) => selectedIds.has(t.id));
-  const anyInPlaylist = selectedTracks.some((t) =>
-    localTracks.some((lt) => lt.id === t.id),
-  );
-
-  async function handleBulkAction() {
-    if (isBulkBusy || selectedTracks.length === 0) return;
-
-    setIsBulkBusy(true);
+    setLocalTracks((prev) => prev.filter((t) => !ids.includes(t.id)));
+    ids.forEach(onTrackRemoved);
+    setSelectedIds(new Set());
 
     try {
-      for (const track of selectedTracks) {
-        const isInPlaylist = localTracks.some((t) => t.id === track.id);
-
-        if (anyInPlaylist && isInPlaylist) {
-          await removeTrack(track.id);
-        }
-
-        if (!anyInPlaylist && !isInPlaylist) {
-          await addTrack(track);
-        }
-      }
-    } finally {
-      setSelectedIds(new Set());
-      setIsBulkBusy(false);
+      await Promise.all(
+        ids.map((id) =>
+          fetch(`${API_BASE}/playlists/${playlistId}/tracks/${id}`, {
+            method: "DELETE",
+          }),
+        ),
+      );
+    } catch {
+      setLocalTracks(snapshot);
     }
   }
 
-  if (localTracks.length === 0) {
-    return (
-      <p className="mt-6 text-neutral-400">This playlist has no tracks.</p>
-    );
+  async function addTracks(ids: string[]) {
+    const snapshot = localTracks;
+    const toAdd = tracks.filter((t) => ids.includes(t.id));
+
+    setLocalTracks((prev) => [...prev, ...toAdd]);
+    setSelectedIds(new Set());
+
+    try {
+      await Promise.all(
+        ids.map((id) =>
+          fetch(`${API_BASE}/playlists/${playlistId}/tracks`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ track_id: id }),
+          }),
+        ),
+      );
+    } catch {
+      setLocalTracks(snapshot);
+    }
   }
 
   return (
     <>
-      {/* BULK ACTION BAR */}
-      {!noneSelected && (
-        <div className="mb-3 flex items-center gap-4 rounded bg-neutral-800 px-4 py-2 text-sm">
-          <span className="text-neutral-300">{selectedIds.size} selected</span>
-
+      {/* BULK BAR */}
+      {selectedIds.size > 0 && (
+        <div className="mb-3 flex items-center gap-3 text-sm">
+          <span className="text-neutral-400">{selectedIds.size} selected</span>
           <button
-            onClick={handleBulkAction}
-            disabled={isBulkBusy}
-            className="rounded-full bg-green-500 px-4 py-1.5 font-medium text-black hover:bg-green-400 disabled:opacity-40"
+            onClick={() => addTracks([...selectedIds])}
+            className="rounded bg-neutral-800 px-3 py-1 hover:bg-neutral-700"
           >
-            {anyInPlaylist ? "Remove selected" : "Add selected"}
+            Add selected
+          </button>
+          <button
+            onClick={() => removeTracks([...selectedIds])}
+            className="rounded bg-neutral-800 px-3 py-1 hover:bg-neutral-700"
+          >
+            Remove selected
           </button>
         </div>
       )}
 
-      <table className="w-full border-collapse table-fixed text-left text-sm">
+      <table className="w-full border-collapse text-left text-sm table-fixed">
         <thead className="border-b border-neutral-800 text-neutral-400">
           <tr>
-            <th className="w-10 px-2 py-2">
-              <input
-                type="checkbox"
-                checked={allSelected}
-                ref={(el) => {
-                  if (el) el.indeterminate = isIndeterminate;
-                }}
-                onChange={toggleSelectAll}
-                className="h-4 w-4 accent-green-500"
-              />
+            <th className="w-12 px-4 py-2">
+              <button
+                onClick={toggleSelectAll}
+                className="flex h-4 w-4 items-center justify-center rounded-full border border-neutral-600"
+              >
+                {allSelected || someSelected ? (
+                  <span className="h-2 w-2 rounded-full bg-white" />
+                ) : null}
+              </button>
             </th>
-
-            <th className="w-12 px-4 py-2 text-left">#</th>
-            <th className="px-4 py-2 text-left">Title</th>
-            <th className="w-10 pr-2 py-2" />
-            <th className="w-20 px-4 py-2 text-right">Duration</th>
+            <th className="px-4 py-2">Title</th>
+            <th className="w-10" />
+            <th className="px-4 py-2 text-right">Duration</th>
           </tr>
         </thead>
 
         <tbody>
-          {localTracks.map((track, index) => {
-            const isInPlaylist = localTracks.some((t) => t.id === track.id);
-
-            return (
-              <TrackRow
-                key={track.id}
-                track={track}
-                index={index}
-                tracks={tracks}
-                isInPlaylist={isInPlaylist}
-                isSelected={selectedIds.has(track.id)}
-                onSelect={() => toggleRow(track.id)}
-                onAdd={addTrack}
-                onRemove={removeTrack}
-              />
-            );
-          })}
+          {tracks.map((track, index) => (
+            <TrackRow
+              key={track.id}
+              track={track}
+              index={index}
+              tracks={tracks}
+              isInPlaylist={isInPlaylist(track.id)}
+              selected={selectedIds.has(track.id)}
+              onToggleSelect={() => toggleSelect(track.id)}
+              onAdd={() => addTracks([track.id])}
+              onRemove={() => removeTracks([track.id])}
+            />
+          ))}
         </tbody>
       </table>
     </>

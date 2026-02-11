@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useState } from "react";
 import { useAudioPlayer } from "./AudioPlayerContext";
 
 type Track = {
@@ -31,6 +31,11 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
 
   const [tracks, setTracks] = useState<Track[]>([]);
   const [index, setIndex] = useState(0);
+
+  const onEnded = () => {
+    setIsPlaying(false);
+    onEndedRef.current?.();
+  };
 
   function playAt(i: number) {
     const t = tracks[i];
@@ -95,17 +100,6 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
       audio.pause();
     }
   }
-
-  /** 🔥 AUTO-ADVANCE ON TRACK END */
-  useEffect(() => {
-    audio.setOnEnded(() => {
-      next();
-    });
-
-    return () => {
-      audio.setOnEnded(null);
-    };
-  }, [audio, index, tracks]);
 
   return (
     <PlaybackContext.Provider

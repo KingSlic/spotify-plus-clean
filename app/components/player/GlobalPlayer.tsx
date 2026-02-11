@@ -10,7 +10,7 @@ import {
   Volume2,
   VolumeX,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo } from "react";
 
 function formatTime(seconds: number) {
   if (!Number.isFinite(seconds)) return "0:00";
@@ -22,6 +22,9 @@ function formatTime(seconds: number) {
 }
 
 export default function GlobalPlayer() {
+  const audio = useAudioPlayer();
+  const playback = usePlayback();
+
   const {
     currentTrack,
     isPlaying,
@@ -32,17 +35,20 @@ export default function GlobalPlayer() {
     resume,
     seek,
     setVolume,
-  } = useAudioPlayer();
-
-  const { hasNext, hasPrev, next, prev } = usePlayback();
+  } = audio;
 
   const hasTrack = Boolean(currentTrack?.preview_url);
 
-  const [isScrubbing, setIsScrubbing] = useState(false);
-  const [scrubValue, setScrubValue] = useState(0);
-  const [wasPlaying, setWasPlaying] = useState(false);
+  /** 🔑 AUTO-ADVANCE (FINAL, SINGLE WIRE) */
+  useEffect(() => {
+    audio.setOnEnded(() => {
+      if (playback.hasNext) {
+        playback.next();
+      }
+    });
 
-  const displayTime = isScrubbing ? scrubValue : currentTime;
+    return () => audio.setOnEnded(null);
+  }, [audio, playback]);
 
   const artistLabel = useMemo(() => {
     if (!currentTrack?.artists?.length) return "";
@@ -54,28 +60,9 @@ export default function GlobalPlayer() {
     isPlaying ? pause() : resume();
   }
 
-  function startScrub() {
-    if (!hasTrack) return;
-    setIsScrubbing(true);
-    setScrubValue(currentTime);
-    setWasPlaying(isPlaying);
-    if (isPlaying) pause();
-  }
-
-  function endScrub() {
-    if (!hasTrack) return;
-    setIsScrubbing(false);
-    seek(scrubValue);
-    if (wasPlaying) resume();
-  }
-
-  function toggleMute() {
-    setVolume(volume === 0 ? 1 : 0);
-  }
-
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-50 pointer-events-none">
-      <div className="pointer-events-auto h-[90px] border-t border-neutral-800 bg-neutral-900/95 px-4">
+    <div className="fixed bottom-0 left-0 right-0 z-50">
+      <div className="h-[90px] border-t border-neutral-800 bg-neutral-900/95 px-4">
         <div className="grid h-full grid-cols-[320px_1fr_320px] items-center gap-4">
           {/* LEFT */}
           <div className="flex min-w-0 items-center gap-3">
@@ -103,8 +90,8 @@ export default function GlobalPlayer() {
           <div className="flex flex-col items-center gap-2">
             <div className="flex items-center gap-4">
               <button
-                onClick={prev}
-                disabled={!hasPrev}
+                onClick={playback.prev}
+                disabled={!playback.hasPrev}
                 className="rounded-full p-2 text-neutral-300 hover:bg-neutral-800 disabled:opacity-40"
               >
                 <SkipBack className="h-5 w-5" />
@@ -113,11 +100,7 @@ export default function GlobalPlayer() {
               <button
                 onClick={togglePlay}
                 disabled={!hasTrack}
-                className={`flex h-10 w-10 items-center justify-center rounded-full ${
-                  hasTrack
-                    ? "bg-white text-black hover:scale-105"
-                    : "bg-neutral-700 text-neutral-400"
-                }`}
+                className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-black"
               >
                 {isPlaying ? (
                   <Pause className="h-5 w-5" />
@@ -127,8 +110,8 @@ export default function GlobalPlayer() {
               </button>
 
               <button
-                onClick={next}
-                disabled={!hasNext}
+                onClick={playback.next}
+                disabled={!playback.hasNext}
                 className="rounded-full p-2 text-neutral-300 hover:bg-neutral-800 disabled:opacity-40"
               >
                 <SkipForward className="h-5 w-5" />
@@ -136,8 +119,8 @@ export default function GlobalPlayer() {
             </div>
 
             <div className="flex w-full max-w-[680px] items-center gap-2">
-              <span className="w-10 text-right text-[11px] text-neutral-400">
-                {formatTime(displayTime)}
+              <span className="w-10 text-right text-[11px] tabular-nums text-neutral-400">
+                {formatTime(currentTime)}
               </span>
 
               <input
@@ -145,15 +128,13 @@ export default function GlobalPlayer() {
                 min={0}
                 max={duration || 0}
                 step={0.1}
-                value={Math.min(displayTime, duration || 0)}
-                onMouseDown={startScrub}
-                onMouseUp={endScrub}
-                onChange={(e) => setScrubValue(Number(e.target.value))}
+                value={Math.min(currentTime, duration || 0)}
+                onChange={(e) => seek(Number(e.target.value))}
                 disabled={!hasTrack}
                 className="w-full accent-white"
               />
 
-              <span className="w-10 text-[11px] text-neutral-400">
+              <span className="w-10 text-[11px] tabular-nums text-neutral-400">
                 {formatTime(duration)}
               </span>
             </div>
@@ -162,7 +143,7 @@ export default function GlobalPlayer() {
           {/* RIGHT */}
           <div className="flex items-center justify-end gap-3">
             <button
-              onClick={toggleMute}
+              onClick={() => setVolume(volume === 0 ? 1 : 0)}
               className="rounded-full p-2 text-neutral-300 hover:bg-neutral-800"
             >
               {volume === 0 ? (

@@ -16,8 +16,8 @@ export default function TrackRow({
   index,
   tracks,
   isInPlaylist,
-  isSelected,
-  onSelect,
+  selected,
+  onToggleSelect,
   onAdd,
   onRemove,
 }: {
@@ -25,12 +25,12 @@ export default function TrackRow({
   index: number;
   tracks: Track[];
   isInPlaylist: boolean;
-  isSelected: boolean;
-  onSelect: () => void;
-  onAdd: (track: Track) => void;
-  onRemove: (trackId: string) => void;
+  selected: boolean;
+  onToggleSelect: () => void;
+  onAdd: () => void;
+  onRemove: () => void;
 }) {
-  const { currentTrack, isPlaying, duration } = useAudioPlayer();
+  const { currentTrack, isPlaying } = useAudioPlayer();
   const { setQueue } = usePlayback();
 
   const isActive = currentTrack?.id === track.id;
@@ -43,7 +43,12 @@ export default function TrackRow({
 
   function handleToggle(e: React.MouseEvent) {
     e.stopPropagation();
-    isInPlaylist ? onRemove(track.id) : onAdd(track);
+    isInPlaylist ? onRemove() : onAdd();
+  }
+
+  function handleSelect(e: React.MouseEvent) {
+    e.stopPropagation();
+    onToggleSelect();
   }
 
   return (
@@ -52,38 +57,34 @@ export default function TrackRow({
         "group transition-colors",
         hasPreview ? "hover:bg-neutral-800" : "opacity-40",
         isActive ? "bg-neutral-800" : "",
-        isSelected ? "bg-neutral-800/70" : "",
       ].join(" ")}
     >
-      {/* CHECKBOX */}
-      <td className="w-10 px-2 text-left">
-        <input
-          type="checkbox"
-          checked={isSelected}
-          onChange={onSelect}
-          onClick={(e) => e.stopPropagation()}
-          className="h-4 w-4 accent-green-500"
-          aria-label="Select track"
-        />
-      </td>
-
-      {/* INDEX / PLAY / EQ */}
+      {/* INDEX / PLAY / EQ / SELECT */}
       <td
         onClick={hasPreview ? handlePlay : undefined}
-        className="w-12 px-4 text-sm text-neutral-400 cursor-pointer"
+        className="relative w-12 px-4 cursor-pointer text-sm text-neutral-400"
       >
-        {!isActive && <span className="group-hover:hidden">{index + 1}</span>}
-
-        {!isActive && hasPreview && (
-          <span className="hidden group-hover:block text-white">▶</span>
-        )}
-
-        {isActive && isPlaying && (
+        {/* Selection dot */}
+        {selected ? (
+          <button
+            onClick={handleSelect}
+            className="flex h-4 w-4 items-center justify-center rounded-full bg-white"
+          >
+            <span className="h-2 w-2 rounded-full bg-black" />
+          </button>
+        ) : isActive && isPlaying ? (
           <span className="flex h-4 items-end gap-[2px]">
             <span className="eq-bar h-2" />
             <span className="eq-bar h-4" />
             <span className="eq-bar h-3" />
           </span>
+        ) : (
+          <>
+            <span className="group-hover:hidden">{index + 1}</span>
+            {hasPreview && (
+              <span className="hidden group-hover:block text-white">▶</span>
+            )}
+          </>
         )}
       </td>
 
@@ -106,19 +107,18 @@ export default function TrackRow({
         </div>
       </td>
 
-      {/* ADD / REMOVE TOGGLE — LEFT OF DURATION */}
-      <td className="w-10 pr-2 text-right align-middle">
+      {/* ADD / REMOVE */}
+      <td className="w-10 text-center">
         <button
           onClick={handleToggle}
           className="opacity-0 group-hover:opacity-100 transition"
-          aria-label={isInPlaylist ? "Remove from playlist" : "Add to playlist"}
         >
           {isInPlaylist ? (
-            <span className="inline-flex h-[18px] w-[18px] items-center justify-center rounded-full bg-green-500 text-black text-[11px] leading-none">
+            <span className="inline-flex h-[16px] w-[16px] items-center justify-center rounded-full bg-green-500 text-black text-[11px]">
               ✓
             </span>
           ) : (
-            <span className="inline-flex h-[18px] w-[18px] items-center justify-center rounded-full border border-neutral-600 text-neutral-500 text-[14px] leading-none">
+            <span className="inline-flex h-[16px] w-[16px] items-center justify-center rounded-full border border-neutral-600 text-neutral-500 text-[14px]">
               +
             </span>
           )}
@@ -128,13 +128,9 @@ export default function TrackRow({
       {/* DURATION */}
       <td
         onClick={hasPreview ? handlePlay : undefined}
-        className="pl-2 pr-4 text-right text-sm text-neutral-400 cursor-pointer"
+        className="px-4 text-right text-sm text-neutral-400 cursor-pointer"
       >
-        {formatDuration(
-          currentTrack?.id === track.id && duration
-            ? duration * 1000
-            : track.duration_ms,
-        )}
+        {formatDuration(track.duration_ms)}
       </td>
     </tr>
   );

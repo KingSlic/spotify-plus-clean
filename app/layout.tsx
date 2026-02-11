@@ -1,9 +1,25 @@
+"use client";
+
 import "./globals.css";
 
-import GlobalPlayer from "@/app/components/player/GlobalPlayer";
 import Sidebar from "@/app/components/Sidebar";
+import GlobalPlayer from "@/app/components/player/GlobalPlayer";
 import { AudioPlayerProvider } from "@/app/contexts/AudioPlayerContext";
-import { PlaybackProvider } from "@/app/contexts/PlaybackContext";
+import { PlaybackProvider, usePlayback } from "@/app/contexts/PlaybackContext";
+
+function AppShell({ children }: { children: React.ReactNode }) {
+  const playback = usePlayback();
+
+  return (
+    <>
+      <div className="flex">
+        <Sidebar />
+        <main className="flex-1 min-h-screen pb-24">{children}</main>
+      </div>
+      <GlobalPlayer />
+    </>
+  );
+}
 
 export default function RootLayout({
   children,
@@ -15,11 +31,7 @@ export default function RootLayout({
       <body className="bg-black text-white">
         <AudioPlayerProvider>
           <PlaybackProvider>
-            <div className="flex">
-              <Sidebar />
-              <main className="flex-1 min-h-screen pb-24">{children}</main>
-            </div>
-            <GlobalPlayer />
+            <AppShell>{children}</AppShell>
           </PlaybackProvider>
         </AudioPlayerProvider>
       </body>
