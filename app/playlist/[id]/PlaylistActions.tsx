@@ -1,8 +1,8 @@
 "use client";
 
 import { useAudioPlayer } from "@/app/contexts/AudioPlayerContext";
-import { usePlayback } from "../../contexts/PlaybackContext";
 import { useMemo } from "react";
+import { usePlayback } from "../../contexts/PlaybackContext";
 
 type Track = {
   id: string;

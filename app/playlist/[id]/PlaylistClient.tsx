@@ -1,6 +1,6 @@
 "use client";
 
-import { useAudioPlayer } from "@/app/contexts/AudioPlayerContext";
+import { usePlayback } from "@/app/contexts/PlaybackContext";
 import { useMemo, useState } from "react";
 import TrackTable from "./TrackTable";
 
@@ -9,7 +9,6 @@ type Track = {
   title: string;
   duration_ms: number | null;
   preview_url: string | null;
-  album?: { id: string; title: string; image_url?: string | null } | null;
   artists?: { id: string; name: string }[];
 };
 
@@ -18,13 +17,9 @@ type Playlist = {
   name: string;
   description?: string | null;
   image_url?: string | null;
-  section_id?: string | null;
-  type?: string | null;
 };
 
 type Mode = "view" | "manage";
-
-const API_BASE = "http://127.0.0.1:5000/api";
 
 export default function PlaylistClient({
   playlist,
@@ -33,29 +28,40 @@ export default function PlaylistClient({
   playlist: Playlist;
   tracks: Track[];
 }) {
-  const { setQueue } = useAudioPlayer();
+  const { setQueue } = usePlayback();
 
   const [mode, setMode] = useState<Mode>("view");
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
-  const selectedCount = selected.size;
+  const [stagedSet, setStagedSet] = useState<Set<string>>(
+    new Set(tracks.map((t) => t.id)),
+  );
 
-  const firstPlayable = useMemo(() => {
-    return tracks.find((t) => Boolean(t.preview_url)) ?? null;
-  }, [tracks]);
+  function toggleMembership(id: string) {
+    setStagedSet((prev) => {
+      const copy = new Set(prev);
+      copy.has(id) ? copy.delete(id) : copy.add(id);
+      return copy;
+    });
+  }
 
-  async function handleHeaderPlay() {
+  const firstPlayable = useMemo(
+    () => tracks.find((t) => t.preview_url),
+    [tracks],
+  );
+
+  function handleHeaderPlay() {
     if (!firstPlayable) return;
-
     const startIndex = tracks.findIndex((t) => t.id === firstPlayable.id);
-
-    await setQueue(tracks, { startIndex, autoplay: true });
+    setQueue(tracks, { startIndex, autoplay: true });
   }
 
   return (
-    <div className="p-6 text-white">
-      <div className="flex items-end gap-6">
-        <div className="h-44 w-44 shrink-0 overflow-hidden rounded-md bg-neutral-800">
+    <div className="max-w-6xl">
+      {/* HEADER */}
+      <div className="flex items-end gap-8 mb-10">
+        {/* COVER */}
+        <div className="h-56 w-56 shrink-0 overflow-hidden rounded-md bg-neutral-800 shadow-lg">
           {playlist.image_url ? (
             <img
               src={playlist.image_url}
@@ -69,59 +75,83 @@ export default function PlaylistClient({
           )}
         </div>
 
-        <div className="min-w-0">
+        {/* TITLE AREA */}
+        <div className="flex-1 min-w-0">
           <div className="text-xs uppercase tracking-widest text-neutral-400">
             Playlist
           </div>
 
-          <h1 className="mt-2 truncate text-5xl font-extrabold">
+          <h1 className="mt-3 text-6xl font-extrabold truncate">
             {playlist.name}
           </h1>
 
-          {playlist.description && (
-            <p className="mt-2 max-w-2xl text-neutral-300">
+          {playlist.description ? (
+            <p className="mt-4 text-neutral-400 text-lg">
               {playlist.description}
+            </p>
+          ) : (
+            <p className="mt-4 text-neutral-500 text-lg">
+              {tracks.length} songs
             </p>
           )}
 
-          {/* PLAY BUTTON — INLINE SVG + FILTER RESET */}
-          <div className="mt-5 flex items-center gap-3">
+          {/* ACTIONS */}
+          <div className="mt-6 flex items-center gap-4">
             <button
               onClick={handleHeaderPlay}
               disabled={!firstPlayable}
-              style={{ filter: "none" }}
-              className="flex items-center gap-3 rounded-full bg-green-500 px-7 py-3 font-semibold text-white hover:bg-green-400 hover:scale-[1.02] transition disabled:opacity-40"
+              className="flex items-center gap-3 rounded-full bg-green-500 px-8 py-3 font-semibold text-black hover:bg-green-400 transition disabled:opacity-40"
             >
-              <svg
-                width="20"
-                height="20"
-                viewBox="0 0 24 24"
-                fill="#ffffff"
-                xmlns="http://www.w3.org/2000/svg"
-                style={{ filter: "none" }}
-              >
-                <path d="M8 5v14l11-7z" />
-              </svg>
-              <span style={{ filter: "none", color: "#ffffff" }}>Play</span>
+              ▶ Play
             </button>
 
             <button
               onClick={() => setMode((m) => (m === "view" ? "manage" : "view"))}
-              className="rounded-full border border-neutral-700 px-4 py-2 text-sm text-neutral-200 hover:bg-neutral-900"
+              className="rounded-full border border-neutral-700 px-6 py-3 text-sm text-neutral-200 hover:bg-neutral-900 transition"
             >
               {mode === "view" ? "Manage" : "Done"}
             </button>
 
-            <div className="ml-auto text-sm text-neutral-400">
+            <div className="ml-auto text-neutral-400 text-lg">
               {tracks.length} songs
             </div>
           </div>
         </div>
       </div>
 
-      <div className="mt-4">
-        <TrackTable tracks={tracks} />
+      {/* BULK ACTION BAR (RESERVED SPACE — NO SHIFT) */}
+      <div className="h-14 mb-4">
+        <div
+          className={[
+            "flex items-center gap-4 transition-all duration-200",
+            mode === "manage" && selected.size > 0
+              ? "opacity-100"
+              : "opacity-0 pointer-events-none",
+          ].join(" ")}
+        >
+          <span className="text-neutral-400 text-sm">
+            {selected.size} selected
+          </span>
+
+          <button className="rounded bg-neutral-800 px-4 py-2 hover:bg-neutral-700 transition">
+            Add selected
+          </button>
+
+          <button className="rounded bg-neutral-800 px-4 py-2 hover:bg-neutral-700 transition">
+            Remove selected
+          </button>
+        </div>
       </div>
+
+      {/* TABLE */}
+      <TrackTable
+        tracks={tracks}
+        mode={mode}
+        selected={selected}
+        setSelected={setSelected}
+        stagedSet={stagedSet}
+        toggleMembership={toggleMembership}
+      />
     </div>
   );
 }

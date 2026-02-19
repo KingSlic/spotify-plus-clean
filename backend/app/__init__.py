@@ -2,6 +2,7 @@ from flask import Flask
 from app.config import Config
 from app.extensions import db
 from flask_cors import CORS
+from app.routes.cadence import cadence_bp
 
 from app.routes.artists import artists_bp
 from app.routes.albums import albums_bp
@@ -19,11 +20,15 @@ def create_app():
 
     db.init_app(app)
 
+
     app.register_blueprint(artists_bp, url_prefix="/api/artists")
     app.register_blueprint(albums_bp, url_prefix="/api/albums")
     app.register_blueprint(tracks_bp, url_prefix="/api/tracks")
     app.register_blueprint(playlists_bp, url_prefix="/api/playlists")
     app.register_blueprint(sections_bp, url_prefix="/api/sections")
     app.register_blueprint(search_bp, url_prefix="/api/search")
+
+    
+    app.register_blueprint(cadence_bp)
 
     return app

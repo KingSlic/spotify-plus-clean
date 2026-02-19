@@ -11,136 +11,126 @@ type Track = {
   artists?: { id: string; name: string }[];
 };
 
+type Mode = "view" | "manage";
+
+function formatTime(ms: number | null) {
+  if (!ms) return "0:00";
+  const totalSeconds = Math.floor(ms / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+}
+
+function Equalizer({ isPlaying }: { isPlaying: boolean }) {
+  return (
+    <div className="flex items-end gap-[2px] h-4">
+      <div
+        className={`w-[2px] h-4 bg-green-500 origin-bottom ${
+          isPlaying ? "animate-equalizer" : "animate-equalizerSlow"
+        }`}
+        style={{ animationDelay: "0s" }}
+      />
+      <div
+        className={`w-[2px] h-4 bg-green-500 origin-bottom ${
+          isPlaying ? "animate-equalizer" : "animate-equalizerSlow"
+        }`}
+        style={{ animationDelay: "0.15s" }}
+      />
+      <div
+        className={`w-[2px] h-4 bg-green-500 origin-bottom ${
+          isPlaying ? "animate-equalizer" : "animate-equalizerSlow"
+        }`}
+        style={{ animationDelay: "0.3s" }}
+      />
+    </div>
+  );
+}
+
 export default function TrackRow({
   track,
   index,
   tracks,
-  isInPlaylist,
-  selected,
-  onToggleSelect,
-  onAdd,
-  onRemove,
+  mode,
+  isSelected,
+  toggleSelected,
+  stagedMembership,
+  toggleMembership,
 }: {
   track: Track;
   index: number;
   tracks: Track[];
-  isInPlaylist: boolean;
-  selected: boolean;
-  onToggleSelect: () => void;
-  onAdd: () => void;
-  onRemove: () => void;
+  mode: Mode;
+  isSelected: boolean;
+  toggleSelected: () => void;
+  stagedMembership: boolean;
+  toggleMembership: () => void;
 }) {
-  const { currentTrack, isPlaying } = useAudioPlayer();
   const { setQueue } = usePlayback();
+  const { currentTrack, isPlaying } = useAudioPlayer();
 
-  const isActive = currentTrack?.id === track.id;
-  const hasPreview = Boolean(track.preview_url);
-
-  function handlePlay() {
-    if (!hasPreview) return;
-    setQueue(tracks, index);
-  }
-
-  function handleToggle(e: React.MouseEvent) {
-    e.stopPropagation();
-    isInPlaylist ? onRemove() : onAdd();
-  }
-
-  function handleSelect(e: React.MouseEvent) {
-    e.stopPropagation();
-    onToggleSelect();
-  }
+  const isCurrent = currentTrack?.id === track.id;
 
   return (
-    <tr
-      className={[
-        "group transition-colors",
-        hasPreview ? "hover:bg-neutral-800" : "opacity-40",
-        isActive ? "bg-neutral-800" : "",
-      ].join(" ")}
-    >
-      {/* INDEX / PLAY / EQ / SELECT */}
-      <td
-        onClick={hasPreview ? handlePlay : undefined}
-        className="relative w-12 px-4 cursor-pointer text-sm text-neutral-400"
-      >
-        {/* Selection dot */}
-        {selected ? (
-          <button
-            onClick={handleSelect}
-            className="flex h-4 w-4 items-center justify-center rounded-full bg-white"
-          >
-            <span className="h-2 w-2 rounded-full bg-black" />
-          </button>
-        ) : isActive && isPlaying ? (
-          <span className="flex h-4 items-end gap-[2px]">
-            <span className="eq-bar h-2" />
-            <span className="eq-bar h-4" />
-            <span className="eq-bar h-3" />
-          </span>
+    <tr className="group hover:bg-neutral-800 transition">
+      {/* LEFT COLUMN */}
+      <td className="px-4 py-3 w-12 text-neutral-400">
+        {mode === "manage" ? (
+          <input
+            type="checkbox"
+            checked={isSelected}
+            onChange={toggleSelected}
+            className="h-4 w-4 accent-green-500"
+          />
+        ) : isCurrent ? (
+          <Equalizer isPlaying={isPlaying} />
         ) : (
-          <>
-            <span className="group-hover:hidden">{index + 1}</span>
-            {hasPreview && (
-              <span className="hidden group-hover:block text-white">▶</span>
-            )}
-          </>
+          <span>{index + 1}</span>
         )}
       </td>
 
       {/* TITLE */}
       <td
-        onClick={hasPreview ? handlePlay : undefined}
-        className="px-4 py-2 cursor-pointer"
+        className="px-4 py-3 cursor-pointer"
+        onClick={() => {
+          if (mode === "view" && track.preview_url) {
+            setQueue(tracks, index);
+          }
+        }}
       >
-        <div className="flex flex-col">
-          <span
-            className={
-              isActive ? "font-medium text-green-500" : "font-medium text-white"
-            }
-          >
-            {track.title}
-          </span>
-          <span className="text-sm text-neutral-400">
-            {track.artists?.map((a) => a.name).join(", ")}
-          </span>
+        <div
+          className={`font-medium ${
+            isCurrent ? "text-green-500" : "text-white"
+          }`}
+        >
+          {track.title}
+        </div>
+        <div className="text-sm text-neutral-400">
+          {track.artists?.map((a) => a.name).join(", ")}
         </div>
       </td>
 
-      {/* ADD / REMOVE */}
-      <td className="w-10 text-center">
-        <button
-          onClick={handleToggle}
-          className="opacity-0 group-hover:opacity-100 transition"
-        >
-          {isInPlaylist ? (
-            <span className="inline-flex h-[16px] w-[16px] items-center justify-center rounded-full bg-green-500 text-black text-[11px]">
-              ✓
-            </span>
-          ) : (
-            <span className="inline-flex h-[16px] w-[16px] items-center justify-center rounded-full border border-neutral-600 text-neutral-500 text-[14px]">
-              +
-            </span>
-          )}
-        </button>
+      {/* TOGGLE BUBBLE */}
+      <td className="px-4 py-3 w-14 text-right">
+        {mode === "manage" && (
+          <button
+            onClick={toggleMembership}
+            className={`w-8 h-8 rounded-full flex items-center justify-center border transition
+              ${
+                stagedMembership
+                  ? "bg-green-500 border-green-500 text-black"
+                  : "border-neutral-500 text-neutral-400 hover:border-white hover:text-white"
+              }
+            `}
+          >
+            {stagedMembership ? "✓" : "+"}
+          </button>
+        )}
       </td>
 
       {/* DURATION */}
-      <td
-        onClick={hasPreview ? handlePlay : undefined}
-        className="px-4 text-right text-sm text-neutral-400 cursor-pointer"
-      >
-        {formatDuration(track.duration_ms)}
+      <td className="px-4 py-3 w-20 text-right text-neutral-400">
+        {formatTime(track.duration_ms)}
       </td>
     </tr>
   );
-}
-
-function formatDuration(ms?: number | null) {
-  if (!ms) return "—";
-  const m = Math.floor(ms / 60000);
-  const s = Math.floor((ms % 60000) / 1000)
-    .toString()
-    .padStart(2, "0");
-  return `${m}:${s}`;
 }

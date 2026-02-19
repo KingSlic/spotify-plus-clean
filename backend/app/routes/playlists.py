@@ -54,10 +54,14 @@ def get_playlist_tracks(playlist_id):
     if not playlist:
         return jsonify({"error": "Playlist not found"}), 404
 
-    # Join table stays backend-only
-    tracks = [pt.track for pt in playlist.tracks]
+    ordered_tracks = (
+        PlaylistTrack.query.filter_by(playlist_id=playlist_id)
+        .order_by(PlaylistTrack.position.asc())
+        .all()
+    )
 
-    return jsonify([track.to_dict() for track in tracks]), 200
+    return jsonify([pt.track.to_dict() for pt in ordered_tracks]), 200
+
 
 
 @playlists_bp.route("/<playlist_id>/tracks", methods=["POST"])
