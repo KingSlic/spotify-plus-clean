@@ -1,25 +1,46 @@
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
+
 from flask import Flask
 from app.config import Config
 from app.extensions import db
 from flask_cors import CORS
-from app.routes.cadence import cadence_bp
 
+from app.routes.cadence import cadence_bp
 from app.routes.artists import artists_bp
 from app.routes.albums import albums_bp
 from app.routes.tracks import tracks_bp
 from app.routes.playlists import playlists_bp
 from app.routes.sections import sections_bp
 from app.routes.search import search_bp
+from app.routes.spotify import spotify_bp
 
 
 def create_app():
     app = Flask(__name__)
     app.config.from_object(Config)
 
-    CORS(app, resources={r"/api/*": {"origins": "*"}})
+    # 🔐 Stable secret key (required for sessions)
+    app.secret_key = "dev-secret"
+
+    # 🔐 Session cookie settings (dev only)
+    app.config.update(
+        SESSION_COOKIE_NAME="cadence_session",
+        SESSION_COOKIE_HTTPONLY=True,
+        SESSION_COOKIE_SAMESITE="Lax",
+        SESSION_COOKIE_SECURE=False,  # Must be False on localhost
+    )
+
+    # 🔐 CORS MUST explicitly allow frontend origin
+    CORS(
+        app,
+        resources={r"/api/*": {"origins": ["http://localhost:3000"]}},
+        supports_credentials=True,
+    )
 
     db.init_app(app)
-
 
     app.register_blueprint(artists_bp, url_prefix="/api/artists")
     app.register_blueprint(albums_bp, url_prefix="/api/albums")
@@ -27,8 +48,8 @@ def create_app():
     app.register_blueprint(playlists_bp, url_prefix="/api/playlists")
     app.register_blueprint(sections_bp, url_prefix="/api/sections")
     app.register_blueprint(search_bp, url_prefix="/api/search")
+    app.register_blueprint(spotify_bp, url_prefix="/api/spotify")
 
-    
     app.register_blueprint(cadence_bp)
 
     return app
