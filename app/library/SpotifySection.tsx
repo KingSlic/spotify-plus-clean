@@ -63,16 +63,19 @@ export default function SpotifySection() {
 
         const data = await playlistsRes.json();
 
-        const normalized: NormalizedSpotifyPlaylist[] = (data.items || [])
-          .filter((p: any) => p.owner?.id === meData.id)
+        // 🔧 Handle BOTH possible shapes
+        const rawPlaylists = data.items ?? data.playlists ?? [];
+
+        const normalized: NormalizedSpotifyPlaylist[] = rawPlaylists
           .map((p: any) => ({
             id: p.id,
             name: p.name,
             images: p.images || [],
-            trackCount: p.tracks?.total ?? 0, // FIXED PROPERTY
+            trackCount: p.tracks?.total ?? p.trackCount ?? 0,
             owner: p.owner?.display_name ?? "Unknown",
           }));
 
+        console.log("Spotify playlists received:", rawPlaylists.length);
         console.log("Owned playlists:", normalized.length);
 
         setSpotifyPlaylists(normalized);

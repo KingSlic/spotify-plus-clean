@@ -1,5 +1,6 @@
 "use client";
 
+import EnergyFlowChart from "@/app/components/EnergyFlowChart";
 import { usePlayback } from "@/app/contexts/PlaybackContext";
 import { useMemo, useState } from "react";
 import TrackTable from "./TrackTable";
@@ -75,7 +76,7 @@ export default function PlaylistClient({
           )}
         </div>
 
-        {/* TITLE AREA */}
+        {/* TITLE */}
         <div className="flex-1 min-w-0">
           <div className="text-xs uppercase tracking-widest text-neutral-400">
             Playlist
@@ -119,7 +120,14 @@ export default function PlaylistClient({
         </div>
       </div>
 
-      {/* BULK ACTION BAR (RESERVED SPACE — NO SHIFT) */}
+      {/* 🔥 Cadence Flow Visualization */}
+      {tracks.length > 0 && (
+        <div className="mb-10">
+          <EnergyFlowChart tracks={tracks} />
+        </div>
+      )}
+
+      {/* BULK ACTION BAR */}
       <div className="h-14 mb-4">
         <div
           className={[
@@ -143,7 +151,7 @@ export default function PlaylistClient({
         </div>
       </div>
 
-      {/* TABLE */}
+      {/* TRACK TABLE */}
       <TrackTable
         tracks={tracks}
         mode={mode}

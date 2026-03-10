@@ -4,10 +4,12 @@ import os
 load_dotenv()
 
 from flask import Flask
-from app.config import Config
-from app.extensions import db
 from flask_cors import CORS
 
+from app.config import Config
+from app.extensions import db
+
+# Routes
 from app.routes.cadence import cadence_bp
 from app.routes.artists import artists_bp
 from app.routes.albums import albums_bp
@@ -20,28 +22,29 @@ from app.routes.spotify import spotify_bp
 
 def create_app():
     app = Flask(__name__)
+
+    # =========================
+    # Load config
+    # =========================
     app.config.from_object(Config)
 
-    # 🔐 Stable secret key (required for sessions)
-    app.secret_key = "dev-secret"
-
-    # 🔐 Session cookie settings (dev only)
-    app.config.update(
-        SESSION_COOKIE_NAME="cadence_session",
-        SESSION_COOKIE_HTTPONLY=True,
-        SESSION_COOKIE_SAMESITE="Lax",
-        SESSION_COOKIE_SECURE=False,  # Must be False on localhost
-    )
-
-    # 🔐 CORS MUST explicitly allow frontend origin
+    # =========================
+    # CORS (required for Next.js frontend)
+    # =========================
     CORS(
         app,
         resources={r"/api/*": {"origins": ["http://127.0.0.1:3000"]}},
         supports_credentials=True,
     )
 
+    # =========================
+    # Initialize extensions
+    # =========================
     db.init_app(app)
 
+    # =========================
+    # Register API routes
+    # =========================
     app.register_blueprint(artists_bp, url_prefix="/api/artists")
     app.register_blueprint(albums_bp, url_prefix="/api/albums")
     app.register_blueprint(tracks_bp, url_prefix="/api/tracks")
@@ -50,6 +53,7 @@ def create_app():
     app.register_blueprint(search_bp, url_prefix="/api/search")
     app.register_blueprint(spotify_bp, url_prefix="/api/spotify")
 
+    # Cadence engine
     app.register_blueprint(cadence_bp)
 
     return app

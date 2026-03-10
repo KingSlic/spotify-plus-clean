@@ -7,7 +7,9 @@ from urllib.parse import urlencode
 
 from flask import Blueprint, redirect, request, jsonify, session
 
-spotify_bp = Blueprint("spotify_bp", __name__)
+spotify_bp = Blueprint("spotify_bp", __name__, url_prefix="/api/spotify")
+
+PLAYLIST_TRACK_CACHE = {}
 
 CLIENT_ID = os.getenv("SPOTIFY_CLIENT_ID")
 CLIENT_SECRET = os.getenv("SPOTIFY_CLIENT_SECRET")
@@ -16,6 +18,16 @@ REDIRECT_URI = os.getenv("SPOTIFY_REDIRECT_URI")
 SPOTIFY_AUTH_URL = "https://accounts.spotify.com/authorize"
 SPOTIFY_TOKEN_URL = "https://accounts.spotify.com/api/token"
 SPOTIFY_API_BASE = "https://api.spotify.com/v1"
+
+
+def spotify_required(endpoint, params=None):
+    data, err = spotify_api_get(endpoint, params=params)
+
+    if err:
+        print(f"\n❌ SPOTIFY CALL FAILED: {endpoint}")
+        return None, err
+
+    return data, None
 
 
 def _basic_auth_header():
@@ -29,6 +41,9 @@ def _basic_auth_header():
 
 def _bearer_header():
     token = session.get("spotify_access_token")
+    
+    print("ACCESS TOKEN:", token)
+
     if not token:
         return None
     return {"Authorization": f"Bearer {token}"}
@@ -203,7 +218,7 @@ def callback():
 
 @spotify_bp.route("/me")
 def me():
-    data, err = spotify_api_get("/me")
+    data, err = spotify_required("/me")
     if err:
         return err
     return jsonify(data)
@@ -211,16 +226,53 @@ def me():
 
 @spotify_bp.route("/playlists")
 def playlists():
-    data, err = spotify_api_get("/me/playlists", params={"limit": 50})
+
+    me, err = spotify_required("/me")
     if err:
         return err
-    return jsonify(data)
+
+    playlists = []
+    offset = 0
+    limit = 50
+
+    while True:
+
+        data, err = spotify_required(
+            "/me/playlists", params={"limit": limit, "offset": offset}
+        )
+        if err:
+            return err
+
+        items = data.get("items", [])
+
+        if not items:
+            break
+
+        for p in items:
+
+            owner = p.get("owner", {})
+            images = p.get("images") or []
+
+            playlists.append(
+                {
+                    "id": p.get("id"),
+                    "name": p.get("name"),
+                    "tracks_total": p.get("tracks", {}).get("total"),
+                    "image": images[0]["url"] if images else None,
+                    "owner_id": owner.get("id"),
+                    "owner_name": owner.get("display_name"),
+                    "is_owned": owner.get("id") == me.get("id"),
+                }
+            )
+
+        offset += limit
+
+    return jsonify({"playlists": playlists})
 
 
 @spotify_bp.route("/playlists/<playlist_id>/tracks")
 def playlist_tracks(playlist_id):
 
-    # 2) Fetch tracks with market + paging
     all_items = []
     offset = 0
     limit = 100
@@ -230,8 +282,11 @@ def playlist_tracks(playlist_id):
             f"/playlists/{playlist_id}/tracks",
             params={"limit": limit, "offset": offset, "market": "from_token"},
         )
+
+        # Handle forbidden playlists safely
         if err:
-            return err
+            print("⚠️ Playlist track access blocked:", playlist_id)
+            return jsonify({"tracks": [], "total": 0})
 
         items = data.get("items", [])
         all_items.extend(items)
@@ -242,8 +297,8 @@ def playlist_tracks(playlist_id):
             total = data.get("total", len(all_items))
             break
 
-    # 3) Normalize
     normalized = []
+
     for item in all_items:
         track = item.get("track")
         if not track:
@@ -255,11 +310,8 @@ def playlist_tracks(playlist_id):
         normalized.append(
             {
                 "id": track.get("id"),
-                "name": track.get("name"),
-                "artists": ", ".join(
-                    [a.get("name", "") for a in (track.get("artists") or [])]
-                ),
-                "album": album.get("name"),
+                "title": track.get("name"),
+                "artists": track.get("artists"),
                 "duration_ms": track.get("duration_ms"),
                 "preview_url": track.get("preview_url"),
                 "image": images[0]["url"] if images else None,
@@ -267,3 +319,56 @@ def playlist_tracks(playlist_id):
         )
 
     return jsonify({"tracks": normalized, "total": total})
+
+
+@spotify_bp.route("/library")
+def spotify_library():
+
+    # 1️⃣ Get current user
+    me, err = spotify_required("/me")
+    if err:
+        return err
+
+    # 2️⃣ Get playlists
+    playlists_data, err = spotify_required("/me/playlists", params={"limit": 50})
+    if err:
+        return err
+
+    owned_playlists = []
+
+    for p in playlists_data.get("items", []):
+
+        if p.get("owner", {}).get("id") != me.get("id"):
+            continue
+
+        images = p.get("images") or []
+
+        owned_playlists.append(
+            {
+                "id": p.get("id"),
+                "name": p.get("name"),
+                "tracks_total": p.get("tracks", {}).get("total"),
+                "image": images[0]["url"] if images else None,
+            }
+        )
+
+    return jsonify(
+        {
+            "user": {
+                "id": me.get("id"),
+                "display_name": me.get("display_name"),
+            },
+            "playlists": owned_playlists,
+        }
+    )
+
+
+@spotify_bp.route("/audio-features/<track_id>")
+def audio_features(track_id):
+
+    data, err = spotify_required(f"/audio-features/{track_id}")
+
+    if err:
+        return err
+
+    return jsonify(data)

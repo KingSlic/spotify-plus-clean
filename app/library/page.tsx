@@ -1,9 +1,15 @@
 import PlaylistCard from "@/app/components/PlaylistCard";
-import { fetchPlaylists } from "@/lib/api/server";
 import SpotifySection from "./SpotifySection";
 
 export default async function LibraryPage() {
-  const playlists = await fetchPlaylists();
+  const playlistsData = await fetch(
+    "http://127.0.0.1:5000/api/spotify/playlists",
+    {
+      cache: "no-store",
+    },
+  ).then((res) => res.json());
+
+  const playlists = playlistsData.playlists ?? [];
 
   return (
     <div className="p-8">

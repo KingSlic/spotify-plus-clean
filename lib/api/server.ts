@@ -19,37 +19,65 @@ export async function searchAll(query: string) {
   return res.json();
 }
 
+/**
+ * Fetch Cadence playlists (local DB)
+ */
 export async function fetchPlaylists(): Promise<Playlist[]> {
   const res = await fetch(`${API_BASE}/playlists`, {
     cache: "no-store",
   });
-  if (!res.ok) throw new Error("Failed to fetch playlists");
-  return res.json();
+
+  if (!res.ok) {
+    throw new Error("Failed to fetch playlists");
+  }
+
+  const data = await res.json();
+
+  // Backend returns { playlists: [...] }
+  return data.playlists ?? [];
 }
 
 export async function getAllPlaylists(): Promise<Playlist[]> {
   return fetchPlaylists();
 }
 
+/**
+ * Fetch single playlist
+ */
 export async function fetchPlaylistById(id: string): Promise<Playlist | null> {
   const res = await fetch(`${API_BASE}/playlists/${id}`, {
     cache: "no-store",
   });
+
   if (!res.ok) return null;
-  return res.json();
+
+  const data = await res.json();
+
+  // Backend returns { playlist: {...} }
+  return data.playlist ?? data;
 }
 
-/** ✅ FIXED ENDPOINT */
+/**
+ * Fetch tracks for playlist
+ */
 export async function fetchTracksForPlaylist(
   playlistId: string,
 ): Promise<Track[]> {
   const res = await fetch(`${API_BASE}/playlists/${playlistId}/tracks`, {
     cache: "no-store",
   });
+
   if (!res.ok) return [];
-  return res.json();
+
+  const data = await res.json();
+
+  // Backend returns { tracks: [...] }
+  return data.tracks ?? data ?? [];
 }
 
+/**
+ * Fetch homepage sections
+ */
 export async function fetchSections() {
   const res = await fetch(`${API_BASE}/sections`, {
     cache: "no-store",
@@ -60,5 +88,8 @@ export async function fetchSections() {
     throw new Error("Failed to fetch sections");
   }
 
-  return res.json();
+  const data = await res.json();
+
+  // Backend returns { sections: [...] }
+  return data.sections ?? [];
 }
