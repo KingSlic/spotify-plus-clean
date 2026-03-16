@@ -1,7 +1,15 @@
 import { Playlist } from "@/lib/types/playlist";
 import { Track } from "@/lib/types/track";
+import { cookies } from "next/headers";
 
 const API_BASE = "http://127.0.0.1:5000/api";
+
+function authHeaders() {
+  const cookieStore = cookies();
+  return {
+    cookie: cookieStore.toString(),
+  };
+}
 
 export async function searchAll(query: string) {
   if (!query) {
@@ -10,6 +18,7 @@ export async function searchAll(query: string) {
 
   const res = await fetch(`${API_BASE}/search?q=${encodeURIComponent(query)}`, {
     cache: "no-store",
+    headers: authHeaders(),
   });
 
   if (!res.ok) {
@@ -25,6 +34,7 @@ export async function searchAll(query: string) {
 export async function fetchPlaylists(): Promise<Playlist[]> {
   const res = await fetch(`${API_BASE}/playlists`, {
     cache: "no-store",
+    headers: authHeaders(),
   });
 
   if (!res.ok) {
@@ -33,7 +43,6 @@ export async function fetchPlaylists(): Promise<Playlist[]> {
 
   const data = await res.json();
 
-  // Backend returns { playlists: [...] }
   return data.playlists ?? [];
 }
 
@@ -47,13 +56,13 @@ export async function getAllPlaylists(): Promise<Playlist[]> {
 export async function fetchPlaylistById(id: string): Promise<Playlist | null> {
   const res = await fetch(`${API_BASE}/playlists/${id}`, {
     cache: "no-store",
+    headers: authHeaders(),
   });
 
   if (!res.ok) return null;
 
   const data = await res.json();
 
-  // Backend returns { playlist: {...} }
   return data.playlist ?? data;
 }
 
@@ -63,16 +72,19 @@ export async function fetchPlaylistById(id: string): Promise<Playlist | null> {
 export async function fetchTracksForPlaylist(
   playlistId: string,
 ): Promise<Track[]> {
-  const res = await fetch(`${API_BASE}/playlists/${playlistId}/tracks`, {
-    cache: "no-store",
-  });
+  const res = await fetch(
+    `${API_BASE}/spotify/playlists/${playlistId}/tracks`,
+    {
+      cache: "no-store",
+      headers: authHeaders(),
+    },
+  );
 
   if (!res.ok) return [];
 
   const data = await res.json();
 
-  // Backend returns { tracks: [...] }
-  return data.tracks ?? data ?? [];
+  return data.tracks ?? [];
 }
 
 /**
@@ -81,6 +93,7 @@ export async function fetchTracksForPlaylist(
 export async function fetchSections() {
   const res = await fetch(`${API_BASE}/sections`, {
     cache: "no-store",
+    headers: authHeaders(),
   });
 
   if (!res.ok) {
@@ -90,6 +103,5 @@ export async function fetchSections() {
 
   const data = await res.json();
 
-  // Backend returns { sections: [...] }
   return data.sections ?? [];
 }

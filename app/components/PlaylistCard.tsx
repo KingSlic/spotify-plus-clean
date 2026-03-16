@@ -30,8 +30,8 @@ export default function PlaylistCard({ playlist }: { playlist: Playlist }) {
       const res = await fetch(`${API_BASE}/playlists/${playlist.id}/tracks`);
       if (!res.ok) return;
 
-      const tracks = await res.json();
-      const firstPlayable = tracks.find((t: any) => t.preview_url);
+      const data = await res.json();
+      const firstPlayable = data.tracks?.find((t: any) => t.preview_url);
 
       if (firstPlayable) {
         play(firstPlayable.preview_url, firstPlayable);

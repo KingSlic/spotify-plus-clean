@@ -31,7 +31,7 @@ class Config:
     SESSION_COOKIE_HTTPONLY = True
 
     # IMPORTANT: required for cross-origin (3000 -> 5000)
-    SESSION_COOKIE_SAMESITE = "None"
+    SESSION_COOKIE_SAMESITE = "Lax"
 
     # Must be False for localhost
     SESSION_COOKIE_SECURE = False

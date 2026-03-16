@@ -27,6 +27,21 @@ def create_app():
     # Load config
     # =========================
     app.config.from_object(Config)
+    app.config["PERMANENT_SESSION_LIFETIME"] = 86400  # 1 day in seconds
+
+    # =========================
+    # REQUIRED for Flask sessions
+    # =========================
+    app.secret_key = os.getenv("FLASK_SECRET_KEY", "dev-secret")
+
+    app.config.update(
+        SESSION_COOKIE_NAME="cadence_session",
+        SESSION_COOKIE_HTTPONLY=True,
+        SESSION_COOKIE_SAMESITE="Lax",  # REQUIRED for cross-origin
+        SESSION_COOKIE_SECURE=False,  # must be False for localhost
+        SESSION_PERMANENT=True,  # session cookie will persist until browser is closed
+        PERMANENT_SESSION_LIFETIME=86400,  # 1 day in seconds (adjust as needed)
+    )
 
     # =========================
     # CORS (required for Next.js frontend)

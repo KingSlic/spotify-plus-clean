@@ -5,34 +5,26 @@ import secrets
 import requests
 from urllib.parse import urlencode
 
-from flask import Blueprint, redirect, request, jsonify, session
+from flask import Blueprint, redirect, make_response, request, jsonify, session
 
 spotify_bp = Blueprint("spotify_bp", __name__, url_prefix="/api/spotify")
 
-PLAYLIST_TRACK_CACHE = {}
-
-CLIENT_ID = os.getenv("SPOTIFY_CLIENT_ID")
-CLIENT_SECRET = os.getenv("SPOTIFY_CLIENT_SECRET")
-REDIRECT_URI = os.getenv("SPOTIFY_REDIRECT_URI")
+SPOTIFY_CLIENT_ID = os.getenv("SPOTIFY_CLIENT_ID")
+SPOTIFY_CLIENT_SECRET = os.getenv("SPOTIFY_CLIENT_SECRET")
+SPOTIFY_REDIRECT_URI = os.getenv("SPOTIFY_REDIRECT_URI")
 
 SPOTIFY_AUTH_URL = "https://accounts.spotify.com/authorize"
 SPOTIFY_TOKEN_URL = "https://accounts.spotify.com/api/token"
 SPOTIFY_API_BASE = "https://api.spotify.com/v1"
 
 
-def spotify_required(endpoint, params=None):
-    data, err = spotify_api_get(endpoint, params=params)
-
-    if err:
-        print(f"\n❌ SPOTIFY CALL FAILED: {endpoint}")
-        return None, err
-
-    return data, None
+# ---------------- AUTH HELPERS ---------------- #
 
 
 def _basic_auth_header():
-    auth_str = f"{CLIENT_ID}:{CLIENT_SECRET}"
+    auth_str = f"{SPOTIFY_CLIENT_ID}:{SPOTIFY_CLIENT_SECRET}"
     b64 = base64.b64encode(auth_str.encode()).decode()
+
     return {
         "Authorization": f"Basic {b64}",
         "Content-Type": "application/x-www-form-urlencoded",
@@ -41,19 +33,16 @@ def _basic_auth_header():
 
 def _bearer_header():
     token = session.get("spotify_access_token")
-    
+
     print("ACCESS TOKEN:", token)
 
     if not token:
         return None
+
     return {"Authorization": f"Bearer {token}"}
 
 
 def _refresh_if_needed():
-    """
-    Refresh access token if expired (or about to expire).
-    Safe no-op if we don't have refresh token / expiry.
-    """
     access_token = session.get("spotify_access_token")
     refresh_token = session.get("spotify_refresh_token")
     expires_at = session.get("spotify_expires_at")
@@ -61,7 +50,6 @@ def _refresh_if_needed():
     if not access_token or not refresh_token or not expires_at:
         return
 
-    # refresh 60s early
     if time.time() < (expires_at - 60):
         return
 
@@ -74,8 +62,9 @@ def _refresh_if_needed():
     token_data = resp.json()
 
     new_access = token_data.get("access_token")
+
     if not new_access:
-        print("REFRESH FAILED:", token_data)
+        print("TOKEN REFRESH FAILED:", token_data)
         return
 
     session["spotify_access_token"] = new_access
@@ -83,66 +72,55 @@ def _refresh_if_needed():
         token_data.get("expires_in", 3600)
     )
 
-    # Sometimes Spotify won't re-send refresh_token on refresh (that's normal)
     if token_data.get("refresh_token"):
         session["spotify_refresh_token"] = token_data["refresh_token"]
-
-    # Keep scope around if present
-    if token_data.get("scope"):
-        session["spotify_scope"] = token_data["scope"]
 
     print("SPOTIFY TOKEN REFRESHED")
 
 
 def spotify_api_get(path, params=None):
-    """
-    One consistent Spotify GET with:
-    - auto refresh
-    - clear logging on errors
-    """
+
     _refresh_if_needed()
 
     headers = _bearer_header()
+
     if not headers:
         return None, (jsonify({"error": "Not authenticated"}), 401)
 
     url = f"{SPOTIFY_API_BASE}{path}"
+
     resp = requests.get(url, headers=headers, params=params)
-
-    if resp.status_code == 429:
-        retry_after = resp.headers.get("Retry-After", "2")
-        print(f"RATE LIMITED. Retry after {retry_after} seconds.")
-
-        return None, (
-            jsonify(
-                {
-                    "error": {
-                        "status": 429,
-                        "message": f"Spotify rate limited. Retry after {retry_after} seconds.",
-                    }
-                }
-            ),
-            429,
-        )
 
     if not resp.ok:
         try:
             payload = resp.json()
         except Exception:
-            payload = {"error": {"status": resp.status_code, "message": resp.text}}
+            payload = {"error": resp.text}
 
         print("SPOTIFY API ERROR:", payload)
-        print("SPOTIFY TOKEN SCOPE (session):", session.get("spotify_scope"))
 
         return None, (jsonify(payload), resp.status_code)
 
     return resp.json(), None
 
 
+def spotify_required(endpoint, params=None):
+
+    data, err = spotify_api_get(endpoint, params=params)
+
+    if err:
+        print("❌ SPOTIFY CALL FAILED:", endpoint)
+        return None, err
+
+    return data, None
+
+
+# ---------------- LOGIN ---------------- #
+
+
 @spotify_bp.route("/login")
 def login():
-    # Force re-consent every time while debugging scopes
-    # (so Spotify can't silently reuse old grants)
+
     scope = "user-read-private user-read-email playlist-read-private playlist-read-collaborative"
 
     state = secrets.token_urlsafe(16)
@@ -151,123 +129,105 @@ def login():
     qs = urlencode(
         {
             "response_type": "code",
-            "client_id": CLIENT_ID,
+            "client_id": SPOTIFY_CLIENT_ID,
             "scope": scope,
-            "redirect_uri": REDIRECT_URI,
+            "redirect_uri": SPOTIFY_REDIRECT_URI,
             "show_dialog": "true",
             "state": state,
         }
     )
 
     auth_url = f"{SPOTIFY_AUTH_URL}?{qs}"
-    print("AUTH URL:", auth_url)
-    print("REDIRECT_URI:", REDIRECT_URI)
+
     return redirect(auth_url)
-
-
-@spotify_bp.route("/logout")
-def logout():
-    session.pop("spotify_access_token", None)
-    session.pop("spotify_refresh_token", None)
-    session.pop("spotify_expires_at", None)
-    session.pop("spotify_scope", None)
-    session.pop("spotify_oauth_state", None)
-    return redirect("http://127.0.0.1:3000/library")
 
 
 @spotify_bp.route("/callback")
 def callback():
-    # Validate state (prevents weird mismatches)
-    state = request.args.get("state")
-    expected_state = session.get("spotify_oauth_state")
-    if expected_state and state != expected_state:
-        return jsonify({"error": "Invalid OAuth state"}), 400
 
     code = request.args.get("code")
+
     if not code:
-        return jsonify({"error": "No code provided"}), 400
+        return "Authorization failed", 400
 
     data = {
         "grant_type": "authorization_code",
         "code": code,
-        "redirect_uri": REDIRECT_URI,
+        "redirect_uri": SPOTIFY_REDIRECT_URI,
     }
 
-    response = requests.post(SPOTIFY_TOKEN_URL, headers=_basic_auth_header(), data=data)
-    token_data = response.json()
+    token_response = requests.post(
+        SPOTIFY_TOKEN_URL, headers=_basic_auth_header(), data=data
+    )
 
-    print("FULL TOKEN RESPONSE:", token_data)
+    token_data = token_response.json()
 
     access_token = token_data.get("access_token")
     refresh_token = token_data.get("refresh_token")
-    expires_in = int(token_data.get("expires_in", 3600))
-    scope = token_data.get("scope")
+    expires_in = token_data.get("expires_in")
 
     if not access_token:
-        return jsonify(token_data), 400
+        return jsonify({"error": "Spotify token exchange failed"}), 500
 
     session["spotify_access_token"] = access_token
     session["spotify_refresh_token"] = refresh_token
-    session["spotify_expires_at"] = time.time() + expires_in
-    session["spotify_scope"] = scope
+    session["spotify_expires_at"] = time.time() + int(expires_in)
 
-    print("TOKEN SCOPE (token response):", scope)
+    session.permanent = True
+    session.modified = True
 
     return redirect("http://127.0.0.1:3000/library")
 
 
+# ---------------- USER ---------------- #
+
+
 @spotify_bp.route("/me")
 def me():
+
     data, err = spotify_required("/me")
+
     if err:
         return err
+
     return jsonify(data)
+
+
+# ---------------- PLAYLIST LIST ---------------- #
 
 
 @spotify_bp.route("/playlists")
 def playlists():
 
     me, err = spotify_required("/me")
+
     if err:
         return err
 
     playlists = []
-    offset = 0
-    limit = 50
 
-    while True:
+    data, err = spotify_required("/me/playlists", params={"limit": 50})
 
-        data, err = spotify_required(
-            "/me/playlists", params={"limit": limit, "offset": offset}
+    if err:
+        return err
+
+    for p in data.get("items", []):
+
+        images = p.get("images") or []
+
+        playlists.append(
+            {
+                "id": p.get("id"),
+                "name": p.get("name"),
+                "tracks_total": p.get("tracks", {}).get("total"),
+                "image": images[0]["url"] if images else None,
+            }
         )
-        if err:
-            return err
-
-        items = data.get("items", [])
-
-        if not items:
-            break
-
-        for p in items:
-
-            owner = p.get("owner", {})
-            images = p.get("images") or []
-
-            playlists.append(
-                {
-                    "id": p.get("id"),
-                    "name": p.get("name"),
-                    "tracks_total": p.get("tracks", {}).get("total"),
-                    "image": images[0]["url"] if images else None,
-                    "owner_id": owner.get("id"),
-                    "owner_name": owner.get("display_name"),
-                    "is_owned": owner.get("id") == me.get("id"),
-                }
-            )
-
-        offset += limit
 
     return jsonify({"playlists": playlists})
+
+
+# ---------------- PLAYLIST TRACKS ---------------- #
 
 
 @spotify_bp.route("/playlists/<playlist_id>/tracks")
@@ -278,29 +238,33 @@ def playlist_tracks(playlist_id):
     limit = 100
 
     while True:
+
         data, err = spotify_api_get(
-            f"/playlists/{playlist_id}/tracks",
-            params={"limit": limit, "offset": offset, "market": "from_token"},
+            f"/playlists/{playlist_id}/items", params={"limit": limit, "offset": offset}
         )
 
-        # Handle forbidden playlists safely
         if err:
-            print("⚠️ Playlist track access blocked:", playlist_id)
-            return jsonify({"tracks": [], "total": 0})
+            return jsonify({"tracks": []})
 
         items = data.get("items", [])
+
+        print("RAW TRACK COUNT:", len(items))
+
         all_items.extend(items)
 
-        if data.get("next"):
-            offset += limit
-        else:
-            total = data.get("total", len(all_items))
+        if not data.get("next"):
             break
+
+        offset += limit
+
+    print("TOTAL ITEMS:", len(all_items))
 
     normalized = []
 
     for item in all_items:
+
         track = item.get("track")
+
         if not track:
             continue
 
@@ -310,65 +274,27 @@ def playlist_tracks(playlist_id):
         normalized.append(
             {
                 "id": track.get("id"),
-                "title": track.get("name"),
-                "artists": track.get("artists"),
+                "name": track.get("name"),
+                "artists": ", ".join(a["name"] for a in track.get("artists", [])),
+                "album": album.get("name"),
                 "duration_ms": track.get("duration_ms"),
                 "preview_url": track.get("preview_url"),
                 "image": images[0]["url"] if images else None,
             }
         )
 
-    return jsonify({"tracks": normalized, "total": total})
+    print("NORMALIZED TRACK COUNT:", len(normalized))
+
+    return jsonify({"tracks": normalized, "total": len(normalized)})
 
 
-@spotify_bp.route("/library")
-def spotify_library():
-
-    # 1️⃣ Get current user
-    me, err = spotify_required("/me")
-    if err:
-        return err
-
-    # 2️⃣ Get playlists
-    playlists_data, err = spotify_required("/me/playlists", params={"limit": 50})
-    if err:
-        return err
-
-    owned_playlists = []
-
-    for p in playlists_data.get("items", []):
-
-        if p.get("owner", {}).get("id") != me.get("id"):
-            continue
-
-        images = p.get("images") or []
-
-        owned_playlists.append(
-            {
-                "id": p.get("id"),
-                "name": p.get("name"),
-                "tracks_total": p.get("tracks", {}).get("total"),
-                "image": images[0]["url"] if images else None,
-            }
-        )
-
-    return jsonify(
-        {
-            "user": {
-                "id": me.get("id"),
-                "display_name": me.get("display_name"),
-            },
-            "playlists": owned_playlists,
-        }
-    )
+# ---------------- DEBUG ---------------- #
 
 
-@spotify_bp.route("/audio-features/<track_id>")
-def audio_features(track_id):
+@spotify_bp.route("/debug-session")
+def debug_session():
 
-    data, err = spotify_required(f"/audio-features/{track_id}")
-
-    if err:
-        return err
-
-    return jsonify(data)
+    return {
+        "session_keys": list(session.keys()),
+        "has_token": bool(session.get("spotify_access_token")),
+    }

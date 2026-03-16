@@ -66,14 +66,15 @@ export default function SpotifySection() {
         // 🔧 Handle BOTH possible shapes
         const rawPlaylists = data.items ?? data.playlists ?? [];
 
-        const normalized: NormalizedSpotifyPlaylist[] = rawPlaylists
-          .map((p: any) => ({
+        const normalized: NormalizedSpotifyPlaylist[] = rawPlaylists.map(
+          (p: any) => ({
             id: p.id,
             name: p.name,
             images: p.images || [],
             trackCount: p.tracks?.total ?? p.trackCount ?? 0,
             owner: p.owner?.display_name ?? "Unknown",
-          }));
+          }),
+        );
 
         console.log("Spotify playlists received:", rawPlaylists.length);
         console.log("Owned playlists:", normalized.length);

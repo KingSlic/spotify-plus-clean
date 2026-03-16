@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { fetchPlaylistById, fetchTracksForPlaylist } from "@/lib/api/server";
 import PlaylistClient from "./PlaylistClient";
 
@@ -8,6 +10,8 @@ export default async function PlaylistPage({
 }) {
   const playlist = await fetchPlaylistById(params.id);
   const tracks = await fetchTracksForPlaylist(params.id);
+
+  console.log("TRACK COUNT SERVER:", tracks.length);
 
   if (!playlist) {
     return <div className="p-6 text-white">Playlist not found</div>;
